@@ -44,11 +44,28 @@ lenguaje y produce eventos con salida estructurada; un motor determinista calcul
 ## Comandos
 
 ```bash
+# Pruebas que corren en CI (sin datos reales; las de referencia se omiten con su motivo)
 .venv/bin/python -m pytest -q
+
+# Pruebas de referencia con datos reales locales (nunca versionados)
+DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pytest -q -m referencia
 ```
 
 ## Estructura
 
-- `app/`: código de la aplicación.
-- `tests/`: pruebas automatizadas (no dependen del modelo).
+- `app/datos/`: modelos inmutables, normalización y carga validada de los parquet
+  (solo se leen las columnas necesarias; nunca nombres de tiendas ni propietarios).
+- `app/dominio/`: dinero (`Decimal`), reglas (descuento, subtotal, total, crédito, fecha),
+  máquina de estados con prioridad explícita, invariantes y cierre del pedido.
+- `tests/unit/`, `tests/integracion/`: con datos sintéticos inventados (`tests/fixtures/`).
+- `tests/referencia/`: con datos reales y casos de desarrollo locales (marcador `referencia`).
+  Los resultados esperados se leen siempre desde `EVAL_DEV_PATH`; nunca se copian al repositorio.
 - `datos/`: archivos `.parquet` colocados localmente (ignorados por Git).
+
+## Convenciones del dominio
+
+- Construir decimales con `a_decimal(valor, VALIDACION)`, que usa `Decimal(str(valor))`.
+  Validaciones: `PRECIO` y `CANTIDAD` > 0; `SALDO` y `LIMITE` ≥ 0; `PORCENTAJE` entero entre 0 y 100.
+- Las funciones de cálculo rechazan argumentos que no sean `Decimal` (`exigir_decimal`).
+- `tests/integracion/test_arquitectura.py` prohíbe en `app/datos` y `app/dominio` imports de
+  LLM, red, MLflow o FastAPI, y el uso de `float()`, `repr()` y literales float.
