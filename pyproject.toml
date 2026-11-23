@@ -1,2 +1,6 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+    "referencia: pruebas con los datos reales y los casos de desarrollo locales (se omiten si no están disponibles)",
+]
