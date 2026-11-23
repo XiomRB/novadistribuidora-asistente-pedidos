@@ -78,7 +78,12 @@ def _leer(directorio: Path, nombre: str, registro: _Registro) -> list[dict[str, 
         registro.error("COLUMNA_FALTANTE", archivo, columna)
     if faltantes:
         return None
-    tabla = pd.read_parquet(ruta, columns=list(COLUMNAS[nombre]))
+    try:
+        tabla = pd.read_parquet(ruta, columns=list(COLUMNAS[nombre]))
+    except Exception as exc:  # noqa: BLE001 - error de lectura o decodificación de los datos
+        # Solo el tipo de excepción: su mensaje puede contener rutas u otros datos innecesarios.
+        registro.error("ARCHIVO_ILEGIBLE", archivo, detalle=type(exc).__name__)
+        return None
     columnas = {c: tabla[c].tolist() for c in COLUMNAS[nombre]}
     return [{c: columnas[c][i] for c in COLUMNAS[nombre]} for i in range(len(tabla))]
 

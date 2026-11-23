@@ -95,6 +95,36 @@ class TestErroresDeCarga:
             cargar_datos(directorio)
         assert "ARCHIVO_ILEGIBLE" in _codigos(info.value)
 
+    def test_esquema_legible_pero_lectura_falla(self, tmp_path, monkeypatch):
+        """read_schema() funciona y tiene las columnas, pero pd.read_parquet() falla."""
+        import pyarrow.parquet as pq
+
+        from app.datos import carga
+
+        clientes = ds.clientes()
+        clientes.loc[0, "dias_visita"] = "lunez"  # error independiente en otro archivo
+        directorio = ds.escribir(tmp_path / "d", {"clientes": clientes})
+        assert set(carga.COLUMNAS["productos"]) <= set(pq.read_schema(directorio / "productos.parquet").names)
+
+        lectura_real = carga.pd.read_parquet
+
+        def lectura_que_falla(ruta, *args, **kwargs):
+            if str(ruta).endswith("productos.parquet"):
+                raise OSError(f"fallo de decodificación en {ruta} con datos internos")
+            return lectura_real(ruta, *args, **kwargs)
+
+        monkeypatch.setattr(carga.pd, "read_parquet", lectura_que_falla)
+        with pytest.raises(DatosInvalidos) as info:
+            cargar_datos(directorio)
+
+        ilegibles = [e for e in info.value.errores if e.codigo == "ARCHIVO_ILEGIBLE"]
+        assert [(e.archivo, e.detalle) for e in ilegibles] == [("productos.parquet", "OSError")]
+        # La carga continuó y reunió el error del otro archivo.
+        assert any(e.codigo == "DIA_INVALIDO" and e.clave == "K01" for e in info.value.errores)
+        # No se registra el contenido de la excepción (rutas u otros datos).
+        texto = str(info.value) + " ".join(str(e) for e in info.value.errores + info.value.advertencias)
+        assert str(tmp_path) not in texto and "datos internos" not in texto
+
     def test_columna_faltante(self, tmp_path):
         tabla = ds.productos().drop(columns=["precio"])
         with pytest.raises(DatosInvalidos) as info:

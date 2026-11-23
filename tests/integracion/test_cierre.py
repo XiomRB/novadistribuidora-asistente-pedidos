@@ -138,6 +138,51 @@ class TestLimitesDeCredito:
         assert r.estado is Estado.REQUIERE_REVISION and r.motivos_revision == (Motivo.CREDITO_EXCEDIDO,)
 
 
+class TestCoherenciaDeSustituciones:
+    @pytest.fixture
+    def datos_dos_agotados(self, tmp_path):
+        """Agrega G04 (agotado, sustituto G02) para que dos productos sustituyan hacia la misma línea."""
+        productos = pd.concat(
+            [
+                ds.productos(),
+                pd.DataFrame(
+                    [("G04", "Gaseosa Sol 1 L", "Sol", "bebidas", "1 L", "fardo", 12, 80.0, False, "G02")],
+                    columns=ds.productos().columns,
+                ),
+            ],
+            ignore_index=True,
+        )
+        return cargar_datos(ds.escribir(tmp_path / "d", {"productos": productos}))
+
+    def test_sustitucion_igual_a_la_linea(self, datos):
+        r = cerrar(datos, lineas=[L("G02", 3)], sustituciones=[Sustitucion("G03", "G02", D(3))])
+        assert r.estado is Estado.CONFIRMADO and r.lineas[0].cantidad == D(3)
+
+    def test_linea_combina_unidades_directas_y_sustituidas(self, datos):
+        # 2 fardos de G02 pedidos directamente + 3 que sustituyen a G03.
+        r = cerrar(datos, lineas=[L("G02", 5)], sustituciones=[Sustitucion("G03", "G02", D(3))])
+        assert r.estado is Estado.CONFIRMADO and r.lineas[0].cantidad == D(5)
+
+    def test_varias_sustituciones_acumuladas_en_la_misma_linea(self, datos_dos_agotados):
+        sustituciones = [Sustitucion("G03", "G02", D(3)), Sustitucion("G04", "G02", D(4))]
+        r = cerrar(datos_dos_agotados, lineas=[L("G02", 7)], sustituciones=sustituciones)
+        assert r.estado is Estado.CONFIRMADO and r.sustituciones == tuple(sustituciones)
+
+    def test_varias_sustituciones_mas_unidades_directas(self, datos_dos_agotados):
+        sustituciones = [Sustitucion("G03", "G02", D(3)), Sustitucion("G04", "G02", D(4))]
+        r = cerrar(datos_dos_agotados, lineas=[L("G02", 10)], sustituciones=sustituciones)
+        assert r.estado is Estado.CONFIRMADO
+
+    def test_suma_sustituida_superior_a_la_linea_se_rechaza(self, datos_dos_agotados):
+        sustituciones = [Sustitucion("G03", "G02", D(3)), Sustitucion("G04", "G02", D(4))]
+        with pytest.raises(EntradaCierreIncoherente, match="superan la cantidad de la línea"):
+            cerrar(datos_dos_agotados, lineas=[L("G02", 6)], sustituciones=sustituciones)
+
+    def test_sustitucion_unica_superior_a_la_linea_se_rechaza(self, datos):
+        with pytest.raises(EntradaCierreIncoherente, match="superan la cantidad de la línea"):
+            cerrar(datos, lineas=[L("G02", 2)], sustituciones=[Sustitucion("G03", "G02", D(3))])
+
+
 class TestEntradasIncoherentes:
     def test_cliente_inexistente(self, datos):
         with pytest.raises(ClienteNoEncontrado):

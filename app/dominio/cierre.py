@@ -28,6 +28,7 @@ def _validar_entrada(
     if not hay_eventos_pedido and (lineas or pendientes or sustituciones):
         raise EntradaCierreIncoherente("sin eventos de pedido no puede haber líneas, pendientes ni sustituciones")
     vistos: set[str] = set()
+    cantidad_por_sku: dict[str, Decimal] = {}
     for linea in lineas:
         producto = datos.productos.get(linea.sku)
         if producto is None:
@@ -39,6 +40,8 @@ def _validar_entrada(
         vistos.add(linea.sku)
         exigir_decimal(linea.cantidad)
         a_decimal(linea.cantidad, CANTIDAD, f"cantidad[{linea.sku}]")
+        cantidad_por_sku[linea.sku] = linea.cantidad
+    sustituido_por_sku: dict[str, Decimal] = {}
     for s in sustituciones:
         if s.sku_entregado not in vistos:
             raise EntradaCierreIncoherente(f"sustitución hacia un sku sin línea: {s.sku_entregado}")
@@ -47,6 +50,14 @@ def _validar_entrada(
             raise EntradaCierreIncoherente(f"sustitución no respaldada por el catálogo: {s.sku_solicitado}")
         exigir_decimal(s.cantidad)
         a_decimal(s.cantidad, CANTIDAD, f"sustitucion[{s.sku_solicitado}]")
+        sustituido_por_sku[s.sku_entregado] = sustituido_por_sku.get(s.sku_entregado, Decimal(0)) + s.cantidad
+    # La línea entregada puede incluir además unidades pedidas directamente de ese sku,
+    # pero nunca menos unidades que las sustituidas hacia ella.
+    for sku, sustituido in sustituido_por_sku.items():
+        if sustituido > cantidad_por_sku[sku]:
+            raise EntradaCierreIncoherente(
+                f"las sustituciones hacia {sku} suman {sustituido} y superan la cantidad de la línea ({cantidad_por_sku[sku]})"
+            )
 
 
 def cerrar_pedido(
