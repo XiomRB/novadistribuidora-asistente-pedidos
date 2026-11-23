@@ -1,0 +1,11 @@
+.git
+.venv
+.env
+datos
+tests
+evaluacion
+evidencia
+mlruns
+mlartifacts
+**/__pycache__
+.pytest_cache
