@@ -56,6 +56,12 @@ def indice(datos_reales, lexico):
         ("kola norte 600 ml de 3 litros", [], N, None, ()),
         ("shampoo brisa 24 sobres de 10 ml", [], R, "P02", ("P02",)),
         ("2 de kola 600 ml", [], R, "B01", ("B01",)),
+        # Números sin unidad que son cantidades: se ignoran si ningún candidato coincide.
+        ("2 de aceite dorado", [], R, "A06", ("A06",)),
+        ("2 de cloro blancura", [], R, "L03", ("L03",)),
+        ("y 4 sal pacifico", [], R, "A11", ("A11",)),
+        ("kola de 5", [], A, None, ("B01", "B02", "B03")),
+        ("2 de kola 600", [], R, "B01", ("B01",)),
         ("dulcitas chocolate", [], G, "S02", ("S02",)),
         ("desodorante fresco", [], G, "P04", ("P04",)),
     ],

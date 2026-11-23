@@ -8,8 +8,12 @@ Algoritmo de `resolver`:
 2. Puntaje por producto: coincidencias de tokens (10 idéntico, 9 en singular, 8 sin
    diminutivo, 7 parecido) más bonificación por alias completo.
 3. Universo = productos con puntaje, candidatos válidos del LLM y todos sus hermanos (grupo).
-4. Filtro por medida: se descarta lo que contradice la presentación mencionada. Cada medida
-   con unidad explícita debe coincidir; los números sueltos solo cuentan si no hay explícitas.
+4. Filtro por medida: se descarta lo que contradice la presentación mencionada.
+   - Cada medida con unidad explícita es obligatoria: todas deben coincidir.
+   - Los números sin unidad (pueden ser cantidades: "2 de aceite dorado") solo filtran si no
+     hay medidas explícitas y si al menos un candidato del universo coincide con alguno; si
+     ninguno coincide, se ignoran como filtro (código NUMERO_IGNORADO). Esta tolerancia nunca
+     anula una contradicción de medidas explícitas.
 5. Sin evidencia textual (solo candidatos del LLM): ambiguo con el universo (D45).
 6. Sin sobrevivientes: no existe. Un único máximo: resuelto. Empate: ambiguo.
 7. Resuelto y agotado sin sustituto disponible: pendiente de agotado (D38).
@@ -106,8 +110,9 @@ class IndiceCatalogo:
     def compatible_con_medidas(self, sku: str, medidas: frozenset[Medida]) -> bool:
         """Cada medida con unidad explícita es una restricción: todas deben coincidir.
 
-        Los números sin unidad solo se usan si no hay medidas explícitas (basta con que uno
-        coincida), porque pueden ser cantidades que se colaron en la descripción ("2 de kola 600").
+        Si no hay medidas explícitas, basta con que coincida uno de los números sin unidad.
+        La tolerancia a números que son cantidades ("2 de aceite dorado") se aplica en
+        `resolver`, sobre el universo de candidatos.
         """
         if not medidas:
             return True
@@ -148,7 +153,18 @@ class IndiceCatalogo:
         if not universo:
             return Resolucion(TipoResolucion.NO_EXISTE, codigos=tuple(codigos + ["SIN_COINCIDENCIAS"]))
 
-        filtrado = {s for s in universo if self.compatible_con_medidas(s, medidas)}
+        explicitas = frozenset(m for m in medidas if m.unidad is not None)
+        sin_unidad = medidas - explicitas
+        if explicitas:
+            filtrado = {s for s in universo if self.compatible_con_medidas(s, explicitas)}
+        else:
+            filtrado = set(universo)
+            if sin_unidad:
+                coinciden = {s for s in universo if self.compatible_con_medidas(s, sin_unidad)}
+                if coinciden:
+                    filtrado = coinciden
+                else:
+                    codigos.append("NUMERO_IGNORADO")
         if not con_evidencia & universo:
             # D45: solo hay candidatos del LLM; nunca se acepta un SKU sin evidencia textual.
             opciones = self._ordenar(filtrado or universo)

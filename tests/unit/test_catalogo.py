@@ -123,6 +123,36 @@ class TestVariasMedidas:
     def test_varios_numeros_sin_unidad_basta_uno(self, indice):
         assert indice.resolver("2 de gaseosa sol 600").sku == "GS6"
 
+
+class TestNumerosSinUnidad:
+    """Un número sin unidad puede ser una cantidad: si ningún candidato coincide, se ignora."""
+
+    @pytest.mark.parametrize(
+        ("descripcion", "sku"),
+        [("2 de aceite girasol oro", "AC1"), ("y 4 frijol negro", "FN1"), ("3 de cloro claro", "CL1")],
+    )
+    def test_cantidad_sin_unidad_no_elimina_el_producto(self, indice, descripcion, sku):
+        r = indice.resolver(descripcion)
+        assert (r.tipo, r.sku) == (R, sku) and "NUMERO_IGNORADO" in r.codigos
+
+    def test_numero_ignorado_deja_la_ambiguedad_del_grupo(self, indice):
+        r = indice.resolver("gaseosa de 5")
+        assert (r.tipo, r.opciones) == (A, ("GS6", "GS2", "GL2", "GS3"))
+        assert "NUMERO_IGNORADO" in r.codigos
+
+    def test_numero_que_coincide_sigue_filtrando(self, indice):
+        r = indice.resolver("gaseosa de 3")
+        assert r.sku == "GS3" and "NUMERO_IGNORADO" not in r.codigos
+
+    @pytest.mark.parametrize("descripcion", ["gaseosa de 5 litros", "gaseosa sol 600 ml de 5 litros", "2 de gaseosa 5 litros"])
+    def test_la_tolerancia_no_anula_medidas_explicitas(self, indice, descripcion):
+        r = indice.resolver(descripcion)
+        assert (r.tipo, r.sku) == (N, None) and "MEDIDA_SIN_PRODUCTO" in r.codigos
+
+    def test_tolerancia_sobre_el_universo_y_no_sobre_el_catalogo(self, indice):
+        # "4" coincide con PH4 (4 rollos) en el catálogo, pero no con ningún frijol.
+        assert indice.resolver("y 4 frijol negro").sku == "FN1"
+
     @pytest.mark.parametrize(
         ("medidas_sku", "descripcion", "compatible"),
         [
