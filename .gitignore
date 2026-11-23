@@ -1,0 +1,27 @@
+# --- Entorno local y secretos ---
+.venv/
+.env
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# --- Datos: se colocan localmente, nunca se versionan ---
+datos/*
+!datos/.gitkeep
+*.parquet
+
+# --- Material del curso: prohibido en el repositorio ---
+*.zip
+instrucciones*.md
+politicas.md
+catalogo_problemas.md
+anexo*
+Anexo*
+mensajes_dev.jsonl
+ejemplos/
+
+# --- MLflow y artefactos locales ---
+mlruns/
+mlartifacts/
+*.db
