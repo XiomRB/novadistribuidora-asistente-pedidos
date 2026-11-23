@@ -97,6 +97,47 @@ class TestResolucion:
     def test_cantidades_en_la_descripcion_no_son_presentaciones(self, indice):
         assert indice.resolver("2 fardos de gaseosa sol 600").sku == "GS6"
 
+class TestVariasMedidas:
+    """Cada medida explícita es una restricción: ningún producto que contradiga alguna se acepta."""
+
+    @pytest.mark.parametrize(
+        "descripcion",
+        [
+            "gaseosa sol 600 ml de 5 litros",  # antes: GS6 resuelto pese a los 5 L
+            "gaseosa sol 600 ml de 2 litros",  # antes: GS6 resuelto pese a los 2 L
+            "shampoo ola 24 sobres de 20 ml",  # antes: SH1 resuelto pese a los 20 ml
+            "papel nube 4 rollos de 12 rollos",
+        ],
+    )
+    def test_contradiccion_explicita_no_se_acepta(self, indice, descripcion):
+        r = indice.resolver(descripcion)
+        assert (r.tipo, r.sku, r.opciones) == (N, None, ()) and "MEDIDA_SIN_PRODUCTO" in r.codigos
+
+    def test_producto_con_varias_medidas_que_cumple_todas(self, indice):
+        # SH1 tiene "24 sobres" (presentación) y "10 ml" (nombre).
+        assert indice.resolver("shampoo ola 24 sobres de 10 ml").sku == "SH1"
+
+    def test_numero_sin_unidad_se_ignora_si_hay_medida_explicita(self, indice):
+        assert indice.resolver("2 de gaseosa sol 600 ml").sku == "GS6"
+
+    def test_varios_numeros_sin_unidad_basta_uno(self, indice):
+        assert indice.resolver("2 de gaseosa sol 600").sku == "GS6"
+
+    @pytest.mark.parametrize(
+        ("medidas_sku", "descripcion", "compatible"),
+        [
+            ("GS6", "600 ml", True), ("GS6", "600 ml 2 L", False), ("GS2", "600 ml 2 L", False),
+            ("SH1", "10 ml 24 sobres", True), ("SH1", "10 ml 12 sobres", False), ("GS6", "2 600", True),
+            ("GS6", "2 3", False), ("GS6", "", True),
+        ],
+    )
+    def test_compatible_con_medidas(self, indice, medidas_sku, descripcion, compatible):
+        from app.dominio.texto import extraer_medidas
+
+        assert indice.compatible_con_medidas(medidas_sku, extraer_medidas(descripcion)) is compatible
+
+
+class TestCasosEspeciales:
     def test_agotado_cuyo_sustituto_tambien_esta_agotado(self, tmp_path):
         productos = catalogo_e1b.productos()
         productos.loc[productos.sku == "GS2", "disponible"] = False

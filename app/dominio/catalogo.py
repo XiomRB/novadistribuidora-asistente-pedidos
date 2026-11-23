@@ -8,7 +8,8 @@ Algoritmo de `resolver`:
 2. Puntaje por producto: coincidencias de tokens (10 idéntico, 9 en singular, 8 sin
    diminutivo, 7 parecido) más bonificación por alias completo.
 3. Universo = productos con puntaje, candidatos válidos del LLM y todos sus hermanos (grupo).
-4. Filtro por medida: se descarta lo que contradice la presentación mencionada.
+4. Filtro por medida: se descarta lo que contradice la presentación mencionada. Cada medida
+   con unidad explícita debe coincidir; los números sueltos solo cuentan si no hay explícitas.
 5. Sin evidencia textual (solo candidatos del LLM): ambiguo con el universo (D45).
 6. Sin sobrevivientes: no existe. Un único máximo: resuelto. Empate: ambiguo.
 7. Resuelto y agotado sin sustituto disponible: pendiente de agotado (D38).
@@ -103,9 +104,17 @@ class IndiceCatalogo:
         return tuple(sorted(set(skus), key=lambda s: self.entradas[s].orden))
 
     def compatible_con_medidas(self, sku: str, medidas: frozenset[Medida]) -> bool:
+        """Cada medida con unidad explícita es una restricción: todas deben coincidir.
+
+        Los números sin unidad solo se usan si no hay medidas explícitas (basta con que uno
+        coincida), porque pueden ser cantidades que se colaron en la descripción ("2 de kola 600").
+        """
         if not medidas:
             return True
         propias = self.entradas[sku].medidas
+        explicitas = [m for m in medidas if m.unidad is not None]
+        if explicitas:
+            return all(any(m.coincide(p) for p in propias) for m in explicitas)
         return any(m.coincide(p) for m in medidas for p in propias)
 
     def _puntaje(self, sku: str, tokens_mencion: list[str], medidas: frozenset[Medida]) -> int:

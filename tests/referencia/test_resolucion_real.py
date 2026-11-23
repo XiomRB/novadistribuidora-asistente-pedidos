@@ -49,6 +49,13 @@ def indice(datos_reales, lexico):
         ("cocas", ["B01"], A, None, ("B01", "B02", "B03")),
         ("cerveza", [], N, None, ()),
         ("kola de 5 litros", [], N, None, ()),
+        # Varias medidas explícitas: ninguna puede contradecirse.
+        ("kola 600 ml de 5 litros", [], N, None, ()),
+        ("agua pura 600 ml de 2 litros", [], N, None, ()),
+        ("shampoo brisa 24 sobres de 50 ml", [], N, None, ()),
+        ("kola norte 600 ml de 3 litros", [], N, None, ()),
+        ("shampoo brisa 24 sobres de 10 ml", [], R, "P02", ("P02",)),
+        ("2 de kola 600 ml", [], R, "B01", ("B01",)),
         ("dulcitas chocolate", [], G, "S02", ("S02",)),
         ("desodorante fresco", [], G, "P04", ("P04",)),
     ],
