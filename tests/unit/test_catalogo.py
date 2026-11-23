@@ -124,6 +124,20 @@ class TestVariasMedidas:
         assert indice.resolver("2 de gaseosa sol 600").sku == "GS6"
 
 
+    @pytest.mark.parametrize(
+        ("medidas_sku", "descripcion", "compatible"),
+        [
+            ("GS6", "600 ml", True), ("GS6", "600 ml 2 L", False), ("GS2", "600 ml 2 L", False),
+            ("SH1", "10 ml 24 sobres", True), ("SH1", "10 ml 12 sobres", False), ("GS6", "2 600", True),
+            ("GS6", "2 3", False), ("GS6", "", True),
+        ],
+    )
+    def test_compatible_con_medidas(self, indice, medidas_sku, descripcion, compatible):
+        from app.dominio.texto import extraer_medidas
+
+        assert indice.compatible_con_medidas(medidas_sku, extraer_medidas(descripcion)) is compatible
+
+
 class TestNumerosSinUnidad:
     """Un número sin unidad puede ser una cantidad: si ningún candidato coincide, se ignora."""
 
@@ -152,19 +166,6 @@ class TestNumerosSinUnidad:
     def test_tolerancia_sobre_el_universo_y_no_sobre_el_catalogo(self, indice):
         # "4" coincide con PH4 (4 rollos) en el catálogo, pero no con ningún frijol.
         assert indice.resolver("y 4 frijol negro").sku == "FN1"
-
-    @pytest.mark.parametrize(
-        ("medidas_sku", "descripcion", "compatible"),
-        [
-            ("GS6", "600 ml", True), ("GS6", "600 ml 2 L", False), ("GS2", "600 ml 2 L", False),
-            ("SH1", "10 ml 24 sobres", True), ("SH1", "10 ml 12 sobres", False), ("GS6", "2 600", True),
-            ("GS6", "2 3", False), ("GS6", "", True),
-        ],
-    )
-    def test_compatible_con_medidas(self, indice, medidas_sku, descripcion, compatible):
-        from app.dominio.texto import extraer_medidas
-
-        assert indice.compatible_con_medidas(medidas_sku, extraer_medidas(descripcion)) is compatible
 
 
 class TestCasosEspeciales:
