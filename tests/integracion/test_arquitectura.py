@@ -64,3 +64,22 @@ def test_sin_float_ni_repr_ni_decimal_desde_float(ruta):
         if isinstance(nodo, ast.Constant) and isinstance(nodo.value, float):
             infracciones.append(f"literal float {nodo.value} en línea {nodo.lineno}")
     assert not infracciones, infracciones
+
+
+RELOJ_ATRIBUTOS = {"now", "today", "utcnow", "fromtimestamp", "utcfromtimestamp"}
+RELOJ_TIME = {"time", "time_ns", "localtime", "gmtime", "monotonic", "perf_counter"}
+
+
+@pytest.mark.parametrize("ruta", _archivos(), ids=lambda p: str(p.relative_to(RAIZ)))
+def test_sin_reloj_del_sistema(ruta):
+    """El dominio nunca consulta la hora actual: solo usa la fecha_hora de la entrada."""
+    infracciones = []
+    for nodo in ast.walk(_arbol(ruta)):
+        if isinstance(nodo, ast.Attribute):
+            if nodo.attr in RELOJ_ATRIBUTOS:
+                infracciones.append(f".{nodo.attr} en línea {nodo.lineno}")
+            if isinstance(nodo.value, ast.Name) and nodo.value.id == "time" and nodo.attr in RELOJ_TIME:
+                infracciones.append(f"time.{nodo.attr} en línea {nodo.lineno}")
+        if isinstance(nodo, ast.ImportFrom) and nodo.module == "time":
+            infracciones.append(f"from time import … en línea {nodo.lineno}")
+    assert not infracciones, infracciones

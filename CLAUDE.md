@@ -56,7 +56,18 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
 - `app/datos/`: modelos inmutables, normalización y carga validada de los parquet
   (solo se leen las columnas necesarias; nunca nombres de tiendas ni propietarios).
 - `app/dominio/`: dinero (`Decimal`), reglas (descuento, subtotal, total, crédito, fecha),
-  máquina de estados con prioridad explícita, invariantes y cierre del pedido.
+  máquina de estados con prioridad explícita, invariantes y cierre del pedido (E1a), y la
+  interpretación determinista (E1b-1):
+  - `entrada.py`: `EntradaPedido` (fecha_hora sin zona horaria = hora local de Guatemala).
+  - `esquema_eventos.py`: `Interpretacion`, `Evento`, `Fragmento` (sin campos comerciales;
+    patrones validados en código, no en el esquema JSON). Lo reutiliza el intérprete LLM (E3).
+  - `texto.py`: presentaciones, tokens, similitud, `Span` (posiciones sobre el texto original),
+    `localizar` y `anclar`.
+  - `catalogo.py`: índice (grupo, hermanos, alias, medidas) y `resolver()`: nunca acepta un SKU
+    sin evidencia textual (D45); agotado sin sustituto antes que la unidad (D38).
+  - `unidades.py`: cantidades (`Decimal` desde texto), compatibilidad por presentación y UPE,
+    `convertir()`; cantidades inciertas y sueltas sin número nunca se convierten (D46).
+  - `consultas.py`: oraciones con posición y consulta pura = interrogativa sin marcador de compra (D36).
 - `tests/unit/`, `tests/integracion/`: con datos sintéticos inventados (`tests/fixtures/`).
 - `tests/referencia/`: con datos reales y casos de desarrollo locales (marcador `referencia`).
   Los resultados esperados se leen siempre desde `EVAL_DEV_PATH`; nunca se copian al repositorio.
@@ -68,4 +79,9 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
   Validaciones: `PRECIO` y `CANTIDAD` > 0; `SALDO` y `LIMITE` ≥ 0; `PORCENTAJE` entero entre 0 y 100.
 - Las funciones de cálculo rechazan argumentos que no sean `Decimal` (`exigir_decimal`).
 - `tests/integracion/test_arquitectura.py` prohíbe en `app/datos` y `app/dominio` imports de
-  LLM, red, MLflow o FastAPI, y el uso de `float()`, `repr()` y literales float.
+  LLM, red, MLflow o FastAPI, el uso de `float()`, `repr()` y literales float, y el reloj del
+  sistema (`datetime.now`, `date.today`, `time.time`, …). Los umbrales de similitud son
+  porcentajes enteros.
+- El código de E1a (`app/datos/*`, `cierre.py`, `reglas.py`, `estado.py`, `dinero.py`,
+  `resultado.py`, `errores.py`) y sus fixtures no se modifican desde E1b.
+- Los fixtures de E1b están en `tests/fixtures/catalogo_e1b.py` (catálogo inventado).
