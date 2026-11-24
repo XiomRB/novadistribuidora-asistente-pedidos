@@ -140,6 +140,8 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
   - S1 aproximada (>= 80 %, grupos de 5 letras o más): un número solo es evidencia si es una
     presentación compatible con el grupo; un signo de puntuación entre la palabra y la evidencia
     la anula. No ampliar la tolerancia ni reducir los requisitos de evidencia.
-  - C2: si el único marcador de compra de una oración es el patrón de lista de E1b-1, solo
-    cuenta como lista válida (renglón S4 con una señal S1, o dos o más renglones S4 en el mismo
-    mensaje). C4 sigue activando el contexto por su cuenta.
+  - C2 y C3 (precisión de D61) comparten el criterio de renglón de lista válido: un renglón S4
+    con una señal S1, o dos o más renglones S4 en el mismo mensaje. C2 lo aplica cuando el único
+    marcador de compra de la oración es el patrón de lista de E1b-1. "entrega: 10" aislado no
+    da contexto. C4 y los demás marcadores siguen funcionando por su cuenta.
+  - Fin de renglón S4: un punto solo es parte de un número cuando está entre dos dígitos.

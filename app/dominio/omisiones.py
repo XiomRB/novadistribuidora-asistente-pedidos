@@ -22,7 +22,8 @@ menos una condición, evaluada fuera de las consultas puras:
   de E1b-1 ("x: n" o viñeta), solo cuenta si es una lista válida: un renglón S4 que contiene
   una señal S1, o dos o más renglones S4 en el mismo mensaje ("entrega: 10" o "saldo: 3" no
   activan C2).
-- C3: hay un renglón de lista (S4).
+- C3: hay un renglón de lista válido: un renglón S4 que contiene una señal S1, o dos o más
+  renglones S4 en el mismo mensaje (el mismo criterio que C2; "entrega: 10" no activa C3).
 - C4: hay una señal S2.
 - C5: hay una señal S3.
 Sin contexto (un reclamo o un comentario), no se genera nada.
@@ -84,7 +85,9 @@ _VINETA = re.compile(r"^[ \t]*[-*•][ \t]*(?=\S)")
 _RENGLON_CLAVE = re.compile(r"^[ \t]*(?=[^\W\d_])[^\n:,;!?]{1,40}:[ \t]*\d+(?:[.,]\d+)?[ \t]*[.;!]?[ \t]*$")
 _SIN_LISTA = "· "  # prefijo que anula el patrón de lista de E1b-1 y deja los demás marcadores
 _PUNTUACION = re.compile(r"[^\w\s]")  # cualquier signo entre la palabra y su evidencia
-_FIN_RENGLON = re.compile(r"(?<!\d)[.;!?](?!\d)|\n")
+# Fin de renglón: ";", "!", "?", el salto de línea o un punto que no esté entre dos dígitos
+# ("1.5" sigue siendo un número; en "velas: 2. la gaseosa" el punto cierra el renglón).
+_FIN_RENGLON = re.compile(r"[;!?\n]|(?<!\d)\.|\.(?!\d)")
 # Palabras que unen las partes de una misma mención ("3 fardos de gaseosa"). "y", "o" y la coma
 # separan menciones distintas, que generan pendientes distintos.
 _CONECTORES = frozenset({"de", "del", "la", "el", "los", "las", "un", "una", "unos", "unas", "con", "en", "x"})
@@ -298,16 +301,18 @@ class DetectorOmisiones:
         renglones = [s for s in senales if s.tipo is TipoSenal.S4 and fuera(s.span)]
         productos = [s.span for s in senales if s.tipo is TipoSenal.S1]
 
-        def lista_valida(o: Oracion) -> bool:
-            """Revisión del PR #5: un renglón aislado solo vale como lista si contiene una
-            señal S1; dos o más renglones S4 en el mismo mensaje valen como lista aunque sus
-            productos no estén en el catálogo."""
-            del_mensaje = [r for r in renglones if r.span.mensaje == o.span.mensaje]
-            if len(del_mensaje) >= 2:
+        def renglon_valido(r: Senal) -> bool:
+            """Criterio único de C2 y C3 (precisión de D61 en la revisión del PR #5): un renglón
+            aislado vale solo si contiene una señal S1; dos o más renglones S4 en el mismo
+            mensaje valen como lista aunque sus productos no estén en el catálogo."""
+            if sum(1 for x in renglones if x.span.mensaje == r.span.mensaje) >= 2:
                 return True
-            return any(
-                r.span.interseccion(o.span) > 0 and any(r.span.contiene(p) for p in productos) for r in del_mensaje
-            )
+            return any(r.span.contiene(p) for p in productos)
+
+        validos = [r for r in renglones if renglon_valido(r)]
+
+        def lista_valida(o: Oracion) -> bool:
+            return any(r.span.interseccion(o.span) > 0 for r in validos)
 
         def compra(o: Oracion) -> bool:
             if not o.marcador_compra or o.consulta_pura:
@@ -321,7 +326,7 @@ class DetectorOmisiones:
         return Contexto(
             c1_evento=hay_eventos_efectivos,
             c2_compra=any(compra(o) for o in oraciones),
-            c3_lista=TipoSenal.S4 in tipos,
+            c3_lista=bool(validos),
             c4_cantidad=TipoSenal.S2 in tipos,
             c5_habitual=TipoSenal.S3 in tipos,
         )

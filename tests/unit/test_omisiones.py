@@ -317,6 +317,82 @@ class TestS4FrenteAC2:
         assert self.contexto(rec, "mándeme gaseosa") == {"C2"} and self.contexto(rec, "y 3 de frijol negro") == {"C2"}
 
 
+class TestC3RenglonDeLista:
+    """Precisión autorizada de D61: C3 representa un renglón de productos o una lista, con el
+    mismo criterio que C2 (renglón S4 con una señal S1, o dos o más renglones S4 en el mismo
+    mensaje), no cualquier expresión con la forma «x: n»."""
+
+    def contexto(self, rec, mensajes):
+        return activas(rec.detector.contexto(rec.detector.senales(mensajes), oraciones(mensajes), False))
+
+    @pytest.mark.parametrize("mensaje", ["entrega: 10", "saldo: 3", "- recargas: 3", "pedido: 5"])
+    def test_renglon_aislado_sin_producto_es_consulta(self, rec, mensaje):
+        assert self.contexto(rec, [mensaje]) == set()
+        r = procesar(rec, [mensaje])
+        assert r.clasificacion.value == "CONSULTA" and r.cierre.lineas == () and r.cierre.pendientes == ()
+
+    @pytest.mark.parametrize("mensaje", ["frijol rojo: 3", "- gaseosa sol 600", "* cafe monte molido"])
+    def test_renglon_aislado_con_producto_da_contexto(self, rec, mensaje):
+        assert {"C2", "C3"} <= self.contexto(rec, [mensaje])
+        assert procesar(rec, [mensaje]).clasificacion.value == "PEDIDO"
+
+    @pytest.mark.parametrize("mensaje", ["- recargas: 3\n- velas: 2", "pedido:\n- recargas: 3\n- velas: 2"])
+    def test_dos_renglones_de_productos_desconocidos_dan_contexto(self, rec, mensaje):
+        assert {"C2", "C3"} <= self.contexto(rec, [mensaje])
+        r = procesar(rec, [mensaje])
+        assert r.clasificacion.value == "PEDIDO" and [t for _, t, _ in pendientes(r)] == ["recargas: 3", "velas: 2"]
+
+    def test_dos_renglones_sin_vineta_dan_contexto(self, rec):
+        assert {"C2", "C3"} <= self.contexto(rec, ["recargas: 3\nvelas: 2"])
+        assert procesar(rec, ["recargas: 3\nvelas: 2"]).clasificacion.value == "PEDIDO"
+
+    @pytest.mark.xfail(strict=True, reason="Agrupación: el salto de línea no separa menciones (corrección pendiente de autorización)")
+    def test_dos_renglones_sin_vineta_son_pendientes_distintos(self, rec):
+        assert [t for _, t, _ in pendientes(procesar(rec, ["recargas: 3\nvelas: 2"]))] == ["recargas: 3", "velas: 2"]
+
+    def test_renglones_en_mensajes_distintos_no_forman_lista(self, rec):
+        assert self.contexto(rec, ["entrega: 10", "saldo: 3"]) == set()
+
+    @pytest.mark.parametrize("mensaje", ["saldo pendiente: 10 cajas", "entrega: 10 cajas"])
+    def test_c4_es_independiente_de_c2_y_c3(self, rec, mensaje):
+        assert self.contexto(rec, [mensaje]) == {"C4"}
+        assert pendientes(procesar(rec, [mensaje])) == [("producto_ambiguo", "10 cajas", ())]
+
+    def test_c2_y_c3_usan_el_mismo_criterio(self, rec):
+        for mensajes in (["entrega: 10"], ["frijol rojo: 3"], ["- recargas: 3\n- velas: 2"], ["saldo: 3. la gaseosa llegó caliente"]):
+            ctx = rec.detector.contexto(rec.detector.senales(mensajes), oraciones(mensajes), False)
+            assert ctx.c2_compra == ctx.c3_lista, mensajes
+
+
+class TestFinDeRenglon:
+    """Un punto solo es parte de un número cuando está entre dos dígitos."""
+
+    @pytest.mark.parametrize(
+        ("mensaje", "renglon"),
+        [
+            ("- velas: 2. la gaseosa", "velas: 2"),
+            ("- gaseosa sol 600. gracias", "gaseosa sol 600"),
+            ("- gaseosa 1.5. gracias", "gaseosa 1.5"),
+            ("- gaseosa 1.5 l. gracias", "gaseosa 1.5 l"),
+            ("frijol rojo: 1.5", "frijol rojo: 1.5"),
+            ("- frijol negro; y gracias", "frijol negro"),
+            ("- frijol negro! gracias", "frijol negro"),
+        ],
+    )
+    def test_decimales_y_puntos_finales(self, rec, mensaje, renglon):
+        assert [t for tipo, t in senales(rec, mensaje) if tipo == "S4"] == [renglon]
+
+    def test_el_pendiente_no_absorbe_la_oracion_siguiente(self, rec):
+        r = procesar(rec, ["- recargas: 3\n- velas: 2. la gaseosa llegó caliente"])
+        textos = [t for _, t, _ in pendientes(r)]
+        assert textos[:2] == ["recargas: 3", "velas: 2"] and all("la gaseosa" not in t for t in textos)
+
+    def test_renglon_aislado_que_termina_en_punto_no_da_contexto(self, rec):
+        # "velas: 2" es un renglón aislado sin S1: el reclamo que sigue no se vuelve pedido.
+        r = procesar(rec, ["- velas: 2. la gaseosa llegó caliente"])
+        assert r.clasificacion.value == "CONSULTA" and r.cierre.pendientes == ()
+
+
 class TestAgrupacion:
     @pytest.mark.parametrize(
         ("mensaje", "textos"),
