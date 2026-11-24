@@ -469,6 +469,9 @@ class TestValidezS4:
             ("frijol rojo: 3\nrecargas: 3", ["frijol rojo: 3"], ["frijol rojo: 3"]),
             ("- frijol rojo: 3\n- entrega: 10", ["frijol rojo: 3"], ["frijol rojo: 3"]),
             ("- gaseosa sol 600\n- recargas: 3\n- velas: 2", ["gaseosa sol 600", "recargas: 3", "velas: 2"], ["gaseosa sol 600", "recargas: 3", "velas: 2"]),
+            # Consecuencia deliberada del criterio aprobado: con al menos dos renglones sin S1, todos
+            # son válidos, también uno administrativo; no se excluye por su significado léxico.
+            ("recargas: 3\nvelas: 2\nentrega: 10", ["recargas: 3", "velas: 2", "entrega: 10"], ["recargas: 3", "velas: 2", "entrega: 10"]),
         ],
     )
     def test_renglones_validos_y_pendientes(self, rec, mensaje, validos, pendientes_esperados):

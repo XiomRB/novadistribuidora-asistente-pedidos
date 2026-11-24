@@ -148,6 +148,9 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
     demás marcadores siguen funcionando por su cuenta.
   - **Limitación aceptada (listas mixtas):** en "- frijol rojo: 3\n- recargas: 3", el renglón
     de un producto fuera del catálogo no alcanza el umbral y no se detecta como omisión.
+  - **Consecuencia deliberada:** con al menos dos renglones S4 sin S1 en un mensaje, todos son
+    válidos, incluidos los administrativos ("recargas: 3\nvelas: 2\nentrega: 10" genera tres
+    pendientes). No agregar listas de palabras administrativas ni excepciones por viñetas.
   - Fin de renglón S4: un punto solo es parte de un número cuando está entre dos dígitos.
   - Agrupación: un salto de línea separa menciones independientes, salvo que un conector o
     una señal que abarque los dos renglones indique que la descripción continúa; la
