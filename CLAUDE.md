@@ -140,10 +140,14 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
   - S1 aproximada (>= 80 %, grupos de 5 letras o más): un número solo es evidencia si es una
     presentación compatible con el grupo; un signo de puntuación entre la palabra y la evidencia
     la anula. No ampliar la tolerancia ni reducir los requisitos de evidencia.
-  - C2 y C3 (precisión de D61) comparten el criterio de renglón de lista válido: un renglón S4
-    con una señal S1, o dos o más renglones S4 en el mismo mensaje. C2 lo aplica cuando el único
-    marcador de compra de la oración es el patrón de lista de E1b-1. "entrega: 10" aislado no
-    da contexto. C4 y los demás marcadores siguen funcionando por su cuenta.
+  - Renglón S4 válido (opción B, `renglones_validos`): contiene una señal S1, o en su mismo
+    mensaje hay al menos dos renglones S4 **sin** S1 (los que tienen S1 no cuentan para ese
+    umbral; las viñetas no son excepción; los mensajes no se cuentan juntos). El mismo criterio
+    vale para las señales S4 (pendientes de omisión), C2 y C3 (precisión de D61). C2 lo aplica
+    cuando el único marcador de compra de la oración es el patrón de lista de E1b-1. C4 y los
+    demás marcadores siguen funcionando por su cuenta.
+  - **Limitación aceptada (listas mixtas):** en "- frijol rojo: 3\n- recargas: 3", el renglón
+    de un producto fuera del catálogo no alcanza el umbral y no se detecta como omisión.
   - Fin de renglón S4: un punto solo es parte de un número cuando está entre dos dígitos.
   - Agrupación: un salto de línea separa menciones independientes, salvo que un conector o
     una señal que abarque los dos renglones indique que la descripción continúa; la

@@ -19,11 +19,11 @@ Contexto de pedido (D61). Las señales sin cubrir solo generan pendientes si se 
 menos una condición, evaluada fuera de las consultas puras:
 - C1: hay al menos un evento efectivo.
 - C2: alguna oración tiene un marcador de compra. Si su único marcador es el patrón de lista
-  de E1b-1 ("x: n" o viñeta), solo cuenta si es una lista válida: un renglón S4 que contiene
-  una señal S1, o dos o más renglones S4 en el mismo mensaje ("entrega: 10" o "saldo: 3" no
-  activan C2).
-- C3: hay un renglón de lista válido: un renglón S4 que contiene una señal S1, o dos o más
-  renglones S4 en el mismo mensaje (el mismo criterio que C2; "entrega: 10" no activa C3).
+  de E1b-1 ("x: n" o viñeta), solo cuenta si la oración contiene un renglón S4 válido (ver C3;
+  "entrega: 10" o "saldo: 3" no activan C2).
+- C3: hay un renglón de lista válido (`renglones_validos`): un renglón S4 que contiene una
+  señal S1, o uno de al menos dos renglones S4 sin S1 en el mismo mensaje. Es el mismo criterio
+  de C2 y de las propias señales S4 ("entrega: 10" aislado no es señal ni da contexto).
 - C4: hay una señal S2.
 - C5: hay una señal S3.
 Sin contexto (un reclamo o un comentario), no se genera nada.
@@ -93,6 +93,9 @@ _FIN_RENGLON = re.compile(r"[;!?\n]|(?<!\d)\.|\.(?!\d)")
 _CONECTORES = frozenset({"de", "del", "la", "el", "los", "las", "un", "una", "unos", "unas", "con", "en", "x"})
 
 
+MIN_RENGLONES_SIN_PRODUCTO = 2
+
+
 class TipoSenal(StrEnum):
     S1 = "S1"
     S2 = "S2"
@@ -150,6 +153,28 @@ class ResultadoOmisiones:
             )
             for o in self.omisiones
         )
+
+
+def renglones_validos(senales) -> list[Senal]:
+    """Renglones S4 válidos (opción B, revisión del PR #5). Criterio único para las señales S4
+    que pueden generar pendientes, para C2 y para C3. Un renglón S4 es válido si:
+    1. contiene una señal S1, o
+    2. en su mismo mensaje hay al menos dos renglones S4 **sin** señal S1 (los renglones con S1
+       no cuentan para ese umbral).
+    Las viñetas no son una excepción. Los mensajes no se cuentan en conjunto."""
+    senales = list(senales)
+    productos = [s.span for s in senales if s.tipo is TipoSenal.S1]
+    renglones = [s for s in senales if s.tipo is TipoSenal.S4]
+    con_producto = {r for r in renglones if any(r.span.contiene(p) for p in productos)}
+    sin_producto: dict[int, list[Senal]] = {}
+    for r in renglones:
+        if r not in con_producto:
+            sin_producto.setdefault(r.span.mensaje, []).append(r)
+    validos = set(con_producto)
+    for lista in sin_producto.values():
+        if len(lista) >= MIN_RENGLONES_SIN_PRODUCTO:
+            validos.update(lista)
+    return sorted(validos, key=lambda s: s.span)
 
 
 # ---------------------------------------------------------------- tokens con posición
@@ -276,7 +301,10 @@ class DetectorOmisiones:
                     if fin > inicio:
                         resultado.append(Senal(TipoSenal.S4, Span(indice, desplazamiento + inicio, desplazamiento + fin)))
                 desplazamiento += len(linea) + 1
-        return sorted(set(resultado), key=lambda s: (s.span, s.tipo))
+        unicas = set(resultado)
+        validos = set(renglones_validos(unicas))
+        # Solo los renglones S4 válidos son señales (pueden generar pendientes de omisión).
+        return sorted((s for s in unicas if s.tipo is not TipoSenal.S4 or s in validos), key=lambda s: (s.span, s.tipo))
 
     # ------------------------------------------------------------ cobertura y contexto
 
@@ -298,18 +326,8 @@ class DetectorOmisiones:
             return not any(c.contiene(span) for c in puras)
 
         tipos = {s.tipo for s in senales if fuera(s.span)}
-        renglones = [s for s in senales if s.tipo is TipoSenal.S4 and fuera(s.span)]
-        productos = [s.span for s in senales if s.tipo is TipoSenal.S1]
-
-        def renglon_valido(r: Senal) -> bool:
-            """Criterio único de C2 y C3 (precisión de D61 en la revisión del PR #5): un renglón
-            aislado vale solo si contiene una señal S1; dos o más renglones S4 en el mismo
-            mensaje valen como lista aunque sus productos no estén en el catálogo."""
-            if sum(1 for x in renglones if x.span.mensaje == r.span.mensaje) >= 2:
-                return True
-            return any(r.span.contiene(p) for p in productos)
-
-        validos = [r for r in renglones if renglon_valido(r)]
+        # Mismo criterio que las señales S4 (opción B): `renglones_validos`.
+        validos = renglones_validos([s for s in senales if s.tipo is not TipoSenal.S4 or fuera(s.span)])
 
         def lista_valida(o: Oracion) -> bool:
             return any(r.span.interseccion(o.span) > 0 for r in validos)

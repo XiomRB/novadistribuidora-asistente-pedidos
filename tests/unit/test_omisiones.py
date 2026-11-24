@@ -368,10 +368,13 @@ class TestC3RenglonDeLista:
 class TestFinDeRenglon:
     """Un punto solo es parte de un número cuando está entre dos dígitos."""
 
+    def test_punto_final_en_una_lista_de_renglones_sin_producto(self, rec):
+        # Un renglón sin S1 aislado ya no es señal (opción B): se comprueba dentro de una lista.
+        assert [t for tipo, t in senales(rec, "- recargas: 3\n- velas: 2. la gaseosa") if tipo == "S4"] == ["recargas: 3", "velas: 2"]
+
     @pytest.mark.parametrize(
         ("mensaje", "renglon"),
         [
-            ("- velas: 2. la gaseosa", "velas: 2"),
             ("- gaseosa sol 600. gracias", "gaseosa sol 600"),
             ("- gaseosa 1.5. gracias", "gaseosa 1.5"),
             ("- gaseosa 1.5 l. gracias", "gaseosa 1.5 l"),
@@ -444,3 +447,56 @@ class TestSaltoDeLinea:
     def test_coma_y_conjuncion_sin_cambios(self, rec):
         r = procesar(rec, ["mándeme gaseosa sol 600, frijol negro y 2 cajas de aceite"], cliente="K03")
         assert [t for _, t, _ in pendientes(r)] == ["gaseosa sol 600", "frijol negro", "2 cajas de aceite"]
+
+
+class TestValidezS4:
+    """Opción B (revisión del PR #5): un renglón S4 es válido si contiene una señal S1, o si en su
+    mismo mensaje hay al menos dos renglones S4 sin S1 (los renglones con S1 no cuentan para ese
+    umbral). Las viñetas no son excepción. El mismo criterio vale para las señales S4 (pendientes
+    de omisión), para C2 y para C3; C4 no cambia."""
+
+    def renglones(self, rec, mensajes):
+        return [mensajes[s.span.mensaje][s.span.inicio : s.span.fin] for s in rec.detector.senales(mensajes) if s.tipo.value == "S4"]
+
+    def contexto(self, rec, mensajes):
+        return activas(rec.detector.contexto(rec.detector.senales(mensajes), oraciones(mensajes), False))
+
+    @pytest.mark.parametrize(
+        ("mensaje", "validos", "pendientes_esperados"),
+        [
+            ("frijol rojo: 3\nentrega: 10", ["frijol rojo: 3"], ["frijol rojo: 3"]),
+            ("recargas: 3\nvelas: 2", ["recargas: 3", "velas: 2"], ["recargas: 3", "velas: 2"]),
+            ("frijol rojo: 3\nrecargas: 3", ["frijol rojo: 3"], ["frijol rojo: 3"]),
+            ("- frijol rojo: 3\n- entrega: 10", ["frijol rojo: 3"], ["frijol rojo: 3"]),
+            ("- gaseosa sol 600\n- recargas: 3\n- velas: 2", ["gaseosa sol 600", "recargas: 3", "velas: 2"], ["gaseosa sol 600", "recargas: 3", "velas: 2"]),
+        ],
+    )
+    def test_renglones_validos_y_pendientes(self, rec, mensaje, validos, pendientes_esperados):
+        assert self.renglones(rec, [mensaje]) == validos
+        r = procesar(rec, [mensaje])
+        assert [t for _, t, _ in pendientes(r)] == pendientes_esperados
+        assert {"C2", "C3"} <= self.contexto(rec, [mensaje])
+
+    @pytest.mark.parametrize("mensaje", ["entrega: 10", "saldo: 3", "pedido: 5", "- entrega: 10", "* saldo: 3"])
+    def test_renglon_aislado_sin_producto_no_es_senal_ni_contexto(self, rec, mensaje):
+        assert self.renglones(rec, [mensaje]) == [] and self.contexto(rec, [mensaje]) == set()
+        r = procesar(rec, [mensaje])
+        assert r.clasificacion.value == "CONSULTA" and r.cierre.pendientes == ()
+
+    def test_un_evento_no_convierte_entrega_en_omision(self, rec):
+        r = procesar(rec, ["2 de frijol negro\nentrega: 10"], [ev(1, 0, "agregar", "2 de frijol negro", producto="frijol negro", cantidad="2")])
+        assert r.cierre.estado.value == "confirmado" and r.cierre.pendientes == () and r.diagnostico.omisiones == ()
+
+    def test_renglones_en_mensajes_distintos_no_se_cuentan_juntos(self, rec):
+        assert self.renglones(rec, ["recargas: 3", "velas: 2"]) == [] and self.contexto(rec, ["recargas: 3", "velas: 2"]) == set()
+
+    @pytest.mark.parametrize("mensaje", ["saldo pendiente: 10 cajas", "entrega: 10 cajas"])
+    def test_c4_sin_cambios(self, rec, mensaje):
+        assert self.contexto(rec, [mensaje]) == {"C4"}
+        assert pendientes(procesar(rec, [mensaje])) == [("producto_ambiguo", "10 cajas", ())]
+
+    def test_limitacion_lista_mixta_con_producto_desconocido(self, rec):
+        # Limitación aceptada de la opción B: en una lista mixta, un renglón sin S1 (aquí un
+        # producto fuera del catálogo) no alcanza el umbral y no se detecta como omisión.
+        r = procesar(rec, ["- frijol rojo: 3\n- recargas: 3"])
+        assert [t for _, t, _ in pendientes(r)] == ["frijol rojo: 3"]
