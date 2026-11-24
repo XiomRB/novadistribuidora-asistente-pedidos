@@ -501,3 +501,59 @@ def test_precisar_pendiente_agotado_al_mismo_sku_no_forma_ciclo(ctx, ref):
     assert (todos["i1"].estado, todos["i1"].sucesor) == (EstadoItem.REEMPLAZADO, "i2")
     (activo,) = rp.pendientes_activos()
     assert activo.id == "i2" and activo.sku == "GC1" and activo.entradas[0].cantidad == D(2)
+
+
+# ====================================================================== D48 frente a D76: cero coincidencias y cero contradicciones
+
+
+class TestSinCoincidenciasNiContradicciones:
+    """«la de 24» frente a GS6: un número sin unidad que no coincide con ninguna medida del producto.
+    No es evidencia positiva (D76 no lo elige como destino) ni contradicción (D48 no reemplaza)."""
+
+    def test_comparacion_cero_y_cero(self, ctx):
+        from app.dominio.atributos import VocabularioAtributos
+
+        vocab = VocabularioAtributos(ctx.datos, ctx.indice)
+        a = vocab.extraer("la de 24")
+        assert not a.vacio and not a.medidas_explicitas
+        c = vocab.comparar(a, "GS6")
+        assert (c.positivos, c.contradiccion, c.compatible) == (0, False, False)
+        assert vocab.cumple(a, "GS6") is True
+
+    def test_d76_sin_ref_no_elige_el_item_como_destino(self, ctx):
+        rp, sal, _ = correr(ctx, ["2 fardos de gaseosa sol 600", "mejor la de 24, que sean 5"], [
+            SOL600, ev(2, 1, "corregir", "mejor la de 24, que sean 5", producto="la de 24", cantidad="5"),
+        ])
+        assert lineas(sal) == [("GS6", "2")]  # ni la cantidad ni el producto cambian
+        assert [a.accion for a in rp.acciones if a.item == "i1"] == ["CREAR"]
+        assert codigos(rp)["e2"] not in ("CORREGIR_CANTIDAD", "PRECISION_COMPATIBLE", "REEMPLAZO")
+
+    def test_d48_con_ref_conserva_el_sku_y_solo_corrige_la_cantidad(self, ctx):
+        rp, sal, _ = correr(ctx, ["2 fardos de gaseosa sol 600", "de esa la de 24, que sean 5"], [
+            SOL600, ev(2, 1, "corregir", "de esa la de 24, que sean 5", producto="la de 24", cantidad="5", ref="e1"),
+        ])
+        assert lineas(sal) == [("GS6", "5")] and rp.pendientes() == ()
+        assert codigos(rp)["e2"] == "CORREGIR_CANTIDAD"
+        assert not any(a.accion.startswith("REEMPLAZ") for a in rp.acciones)
+
+    def test_d48_con_ref_sin_cantidad_no_cambia_nada(self, ctx):
+        rp, sal, _ = correr(ctx, ["2 fardos de gaseosa sol 600", "la de 24"], [
+            SOL600, ev(2, 1, "precisar", "la de 24", producto="la de 24", ref="e1"),
+        ])
+        assert lineas(sal) == [("GS6", "2")] and rp.pendientes() == ()
+        assert [a.accion for a in rp.acciones] == ["CREAR"]
+
+
+def test_d75_precisar_con_ref_hacia_producto_activo_en_otro_item(ctx):
+    mensajes = ["2 de frijol negro y 3 fardos de gaseosa sol 600", "esa es la de frijol negro"]
+    rp, sal, _ = correr(ctx, mensajes, [
+        ev(1, 0, "agregar", "2 de frijol negro", producto="frijol negro", cantidad="2"),
+        ev(2, 0, "agregar", "3 fardos de gaseosa sol 600", producto="gaseosa sol 600", cantidad="3"),
+        ev(3, 1, "precisar", "esa es la de frijol negro", producto="frijol negro", ref="e2"),
+    ])
+    assert lineas(sal) == [("FN1", "2"), ("GS6", "3")]  # ambos ítems originales intactos
+    todos = items(rp)
+    assert all(todos[i].estado is EstadoItem.ACTIVO for i in ("i1", "i2"))
+    assert [a.accion for a in rp.acciones if a.item in ("i1", "i2")] == ["CREAR", "CREAR"]
+    assert codigos(rp)["e3"] == "REF_CONFLICTO"
+    assert pendientes(rp) == [("producto_ambiguo", ("GS6", "FN1"))]
