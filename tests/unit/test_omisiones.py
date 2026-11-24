@@ -212,22 +212,28 @@ class TestPendientesDeOmision:
 
 # ====================================================================== revisión del PR #5
 #
-# Las pruebas marcadas `xfail(strict=True)` documentan dos defectos encontrados en la revisión
-# (falsos positivos). Su corrección está propuesta y pendiente de autorización: hoy fallan a
-# propósito y, si la corrección se aplica, pasarán y habrá que quitar la marca.
+# Correcciones autorizadas en la revisión del PR #5 (antes documentadas con xfail estricto):
+# - S1 aproximada: un número solo es evidencia si es una presentación compatible con el grupo,
+#   y un signo de puntuación entre la palabra y la evidencia la anula.
+# - C2: una oración cuyo único marcador de compra es el patrón de lista de E1b-1 solo cuenta si
+#   es una lista válida (renglón S4 con una señal S1, o dos o más renglones S4 en el mensaje).
 
-DEFECTO_S1 = "S1 aproximada: un número que no es presentación cuenta como evidencia (corrección pendiente de autorización)"
-DEFECTO_C2 = "C2: una línea 'x: n' sin producto activa el contexto por el reconocedor de listas de E1b-1 (decisión pendiente)"
+# Los seis falsos positivos de la revisión (catálogo real); aquí, sus equivalentes sintéticos.
+FALSOS_POSITIVOS_S1 = ["Claro, 2 de frijol negro", "claro 2 veces", "lechee 3 dias", "aceitee 5 de la tarde", "papeel 7 veces", "detergentee, 2"]
 
 
 class TestS1Aproximada:
     """Coincidencia aproximada (>= 80 %) del sustantivo del grupo, solo con evidencia adyacente.
 
     Correcto: un error leve del grupo seguido de una marca, una variante o una presentación del
-    mismo grupo es señal; sin evidencia, o con evidencia de otro grupo, no lo es; un número que
-    no es una presentación del grupo (una hora, una cantidad de veces) no es evidencia."""
+    mismo grupo es señal; sin evidencia, con evidencia de otro grupo, con un número que no es una
+    presentación del grupo o con puntuación entre medio, no lo es."""
 
-    @pytest.mark.parametrize(("mensaje", "senal"), [("friijol negro", "friijol"), ("gaseosaa 600", "gaseosaa"), ("lechee nieve", "lechee")])
+    @pytest.mark.parametrize(
+        ("mensaje", "senal"),
+        [("friijol negro", "friijol"), ("gaseosaa 600", "gaseosaa"), ("gaseosaa 600 ml", "gaseosaa"), ("gaseosaa de 2 litros", "gaseosaa"),
+         ("lechee nieve", "lechee"), ("aceitee 750 ml", "aceitee")],
+    )
     def test_error_leve_con_evidencia_adyacente(self, rec, mensaje, senal):
         assert senales(rec, mensaje) == [("S1", senal)]
 
@@ -240,53 +246,75 @@ class TestS1Aproximada:
         # "sol" es marca de la gaseosa, "luna" de las galletas y "campo" del frijol.
         assert senales(rec, mensaje) == []
 
+    @pytest.mark.parametrize("mensaje", ["gaseosaa 750", "lechee 600 ml", "cafee 2 litros"])
+    def test_presentacion_de_otro_grupo_no_cuenta(self, rec, mensaje):
+        # 750 ml es del aceite, 600 ml de la gaseosa y 2 L de la gaseosa: ninguno del grupo parecido.
+        assert senales(rec, mensaje) == []
+
     def test_no_confunde_grupos_en_la_misma_frase(self, rec):
         assert senales(rec, "friijol negro y gaseosaa sol") == [("S1", "friijol"), ("S1", "gaseosaa")]
 
-    @pytest.mark.xfail(strict=True, reason=DEFECTO_S1)
-    @pytest.mark.parametrize("mensaje", ["Claro, 2 de frijol negro", "claro 2 veces", "lechee 3 dias", "aceitee 5 de la tarde"])
-    def test_numero_que_no_es_presentacion_no_es_evidencia(self, rec, mensaje):
-        assert [t for _, t in senales(rec, mensaje) if t.casefold() in {"claro", "lechee", "aceitee"}] == []
+    @pytest.mark.parametrize("mensaje", FALSOS_POSITIVOS_S1)
+    def test_regresion_numero_que_no_es_presentacion_o_puntuacion(self, rec, mensaje):
+        parecidas = {"claro", "lechee", "aceitee", "papeel", "detergentee"}
+        assert [t for _, t in senales(rec, mensaje) if t.casefold() in parecidas] == []
 
-    @pytest.mark.xfail(strict=True, reason=DEFECTO_S1)
+    @pytest.mark.parametrize("mensaje", ["friijol, negro", "gaseosaa: 600", "gaseosaa (600)"])
+    def test_puntuacion_entre_la_palabra_y_la_evidencia(self, rec, mensaje):
+        assert [s for s in senales(rec, mensaje) if s[0] == "S1"] == []
+
+    def test_grupos_de_menos_de_5_letras_no_admiten_error_leve(self, rec):
+        assert senales(rec, "cafee 400 g") == [] and senales(rec, "cafe 400 g")[0] == ("S1", "cafe")
+
     def test_claro_al_inicio_no_genera_pendiente(self, rec):
-        # Hoy: "Claro" (seguido de "2") se toma como el cloro y el pedido queda en revisión.
         r = procesar(rec, ["Claro, 2 de frijol negro"], [ev(1, 0, "agregar", "2 de frijol negro", producto="frijol negro", cantidad="2")])
         assert r.cierre.pendientes == () and r.cierre.estado.value == "confirmado"
 
 
 class TestS4FrenteAC2:
-    """S4 es estricta (la línea completa es «producto: número» o empieza con viñeta); C2 usa el
-    reconocedor de E1b-1, que cuenta como marcador de compra cualquier oración que empiece con
-    «x: n» (sección 3.4: los renglones de lista son marcadores de compra)."""
+    """S4 es estricta (la línea completa es «producto: número» o empieza con viñeta). C2 usa el
+    marcador de compra de E1b-1, pero si su único marcador es el patrón de lista, la oración solo
+    cuenta como lista válida: un renglón S4 con una señal S1, o dos o más renglones S4 en el mismo
+    mensaje. C4 sigue activando el contexto por su cuenta (D61)."""
 
     def contexto(self, rec, mensaje):
         ctx = rec.detector.contexto(rec.detector.senales([mensaje]), oraciones([mensaje]), False)
         return activas(ctx)
 
     @pytest.mark.parametrize(("mensaje", "texto"), [("frijol rojo: 3", "frijol rojo: 3"), ("- gaseosa sol 600", "gaseosa sol 600")])
-    def test_renglones_de_producto_son_s4_y_c2(self, rec, mensaje, texto):
+    def test_renglon_aislado_con_producto_activa_c2(self, rec, mensaje, texto):
         assert ("S4", texto) in senales(rec, mensaje) and self.contexto(rec, mensaje) == {"C2", "C3"}
         assert [t for _, t, _ in pendientes(procesar(rec, [mensaje]))] == [texto]
 
+    @pytest.mark.parametrize("mensaje", ["entrega: 10", "saldo: 3"])
+    def test_renglon_aislado_sin_producto_no_activa_c2(self, rec, mensaje):
+        assert "C2" not in self.contexto(rec, mensaje)
+
+    def test_dos_renglones_sin_producto_del_catalogo_activan_c2(self, rec):
+        mensaje = "- recargas: 3\n- velas: 2"
+        assert self.contexto(rec, mensaje) == {"C2", "C3"}
+        assert [t for _, t, _ in pendientes(procesar(rec, [mensaje]))] == ["recargas: 3", "velas: 2"]
+
+    def test_renglones_en_mensajes_distintos_no_forman_lista(self, rec):
+        ctx = rec.detector.contexto(rec.detector.senales(["entrega: 10", "saldo: 3"]), oraciones(["entrega: 10", "saldo: 3"]), False)
+        assert not ctx.c2_compra
+
+    def test_otro_marcador_en_una_linea_de_lista_sigue_contando(self, rec):
+        assert "C2" in self.contexto(rec, "- quiero recargas")
+
     @pytest.mark.parametrize("mensaje", ["saldo pendiente: 10 cajas", "entrega: 10 cajas"])
-    def test_linea_que_no_es_s4_activa_c2_y_c4(self, rec, mensaje):
-        # No es S4, pero activa C2 (reconocedor de listas) y C4 (S2 "10 cajas"). Según D61, basta C4:
-        # el "10 cajas" sin producto queda como pendiente producto_ambiguo sin opciones.
+    def test_linea_que_no_es_s4_solo_activa_c4(self, rec, mensaje):
         assert all(t != "S4" for t, _ in senales(rec, mensaje))
-        assert self.contexto(rec, mensaje) == {"C2", "C4"}
+        assert self.contexto(rec, mensaje) == {"C4"}
         assert pendientes(procesar(rec, [mensaje])) == [("producto_ambiguo", "10 cajas", ())]
 
-    def test_hoy_una_linea_x_n_sin_producto_da_contexto_a_un_reclamo(self, rec):
-        # Evidencia del comportamiento actual: solo C2 (por "saldo: 3") convierte el reclamo en pedido.
-        mensaje = "saldo: 3. la gaseosa llegó caliente"
-        assert self.contexto(rec, mensaje) == {"C2"}
-        assert procesar(rec, [mensaje]).clasificacion.value == "PEDIDO"
-
-    @pytest.mark.xfail(strict=True, reason=DEFECTO_C2)
     def test_reclamo_con_linea_x_n_sin_producto_es_consulta(self, rec):
         r = procesar(rec, ["saldo: 3. la gaseosa llegó caliente"])
-        assert r.clasificacion.value == "CONSULTA" and r.cierre.pendientes == ()
+        assert self.contexto(rec, "saldo: 3. la gaseosa llegó caliente") == set()
+        assert r.clasificacion.value == "CONSULTA" and r.cierre.pendientes == () and r.cierre.lineas == ()
+
+    def test_marcador_de_compra_normal_no_cambia(self, rec):
+        assert self.contexto(rec, "mándeme gaseosa") == {"C2"} and self.contexto(rec, "y 3 de frijol negro") == {"C2"}
 
 
 class TestAgrupacion:

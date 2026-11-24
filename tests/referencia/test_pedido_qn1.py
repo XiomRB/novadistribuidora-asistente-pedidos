@@ -69,7 +69,20 @@ def test_s1_sin_evidencia_o_de_otro_grupo_en_el_catalogo_real(recursos, mensaje)
     assert recursos.detector.senales([mensaje]) == []
 
 
-@pytest.mark.xfail(strict=True, reason="S1 aproximada: un número que no es presentación cuenta como evidencia (corrección pendiente)")
-@pytest.mark.parametrize("mensaje", ["claro 2 veces", "harían 3 viajes", "papito 3 años", "lecho 2"])
+# Regresión de los seis falsos positivos de la revisión (corrección autorizada).
+@pytest.mark.parametrize(
+    "mensaje", ["Claro, 2 de frijol negro", "claro 2 veces", "harían 3 viajes", "papito 3 años", "lecho 2", "aceitee 5 de la tarde"]
+)
 def test_s1_numero_que_no_es_presentacion_en_el_catalogo_real(recursos, mensaje):
-    assert recursos.detector.senales([mensaje]) == []
+    parecidas = {"claro", "harían", "papito", "lecho", "aceitee"}
+    assert [mensaje[s.span.inicio : s.span.fin] for s in recursos.detector.senales([mensaje]) if mensaje[s.span.inicio : s.span.fin].casefold() in parecidas] == []
+
+
+@pytest.mark.parametrize(("mensaje", "senal"), [("nranjita de 600", "nranjita"), ("aceitee 750 ml", "aceitee"), ("leechee vaquita", "leechee")])
+def test_s1_presentacion_o_marca_del_grupo_en_el_catalogo_real(recursos, mensaje, senal):
+    assert [mensaje[s.span.inicio : s.span.fin] for s in recursos.detector.senales([mensaje]) if s.tipo.value == "S1"] == [senal]
+
+
+def test_c2_reclamo_con_linea_sin_producto_es_consulta_en_el_catalogo_real(recursos):
+    r = _procesar(recursos, ["saldo: 3. la kola llegó caliente"], [])
+    assert r.clasificacion is Clasificacion.CONSULTA and r.cierre.pendientes == ()

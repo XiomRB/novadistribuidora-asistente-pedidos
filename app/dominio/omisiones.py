@@ -18,7 +18,10 @@ código no confirma nunca cubren.
 Contexto de pedido (D61). Las señales sin cubrir solo generan pendientes si se cumple al
 menos una condición, evaluada fuera de las consultas puras:
 - C1: hay al menos un evento efectivo.
-- C2: alguna oración tiene un marcador de compra.
+- C2: alguna oración tiene un marcador de compra. Si su único marcador es el patrón de lista
+  de E1b-1 ("x: n" o viñeta), solo cuenta si es una lista válida: un renglón S4 que contiene
+  una señal S1, o dos o más renglones S4 en el mismo mensaje ("entrega: 10" o "saldo: 3" no
+  activan C2).
 - C3: hay un renglón de lista (S4).
 - C4: hay una señal S2.
 - C5: hay una señal S3.
@@ -42,7 +45,10 @@ from enum import StrEnum
 
 from app.datos.modelos import Datos
 from app.dominio.catalogo import IndiceCatalogo, TipoResolucion
-from app.dominio.consultas import Oracion
+# Solo lectura de E1b-1 (sin modificar consultas.py): el patrón con el que su reconocedor cuenta
+# una oración como renglón de lista, para saber si ese es su único marcador de compra.
+from app.dominio.consultas import _LISTA as _LISTA_E1B1
+from app.dominio.consultas import Oracion, tiene_marcador_compra
 from app.dominio.diagnostico import DiagOmision
 from app.dominio.resultado import Motivo, Pendiente
 from app.dominio.texto import (
@@ -50,6 +56,7 @@ from app.dominio.texto import (
     PALABRAS_VACIAS,
     UNIDADES_MEDIDA,
     Span,
+    extraer_medidas,
     peso_coincidencia,
     plegar,
     tokens,
@@ -75,6 +82,8 @@ _PALABRA = re.compile(r"[^\W_]+(?:[.,]\d+)?", re.UNICODE)
 _VINETA = re.compile(r"^[ \t]*[-*•][ \t]*(?=\S)")
 # "x: n" solo cuando la línea completa es el renglón (producto, dos puntos y número).
 _RENGLON_CLAVE = re.compile(r"^[ \t]*(?=[^\W\d_])[^\n:,;!?]{1,40}:[ \t]*\d+(?:[.,]\d+)?[ \t]*[.;!]?[ \t]*$")
+_SIN_LISTA = "· "  # prefijo que anula el patrón de lista de E1b-1 y deja los demás marcadores
+_PUNTUACION = re.compile(r"[^\w\s]")  # cualquier signo entre la palabra y su evidencia
 _FIN_RENGLON = re.compile(r"(?<!\d)[.;!?](?!\d)|\n")
 # Palabras que unen las partes de una misma mención ("3 fardos de gaseosa"). "y", "o" y la coma
 # separan menciones distintas, que generan pendientes distintos.
@@ -186,21 +195,37 @@ class DetectorOmisiones:
 
     # ------------------------------------------------------------ señales
 
-    def _es_grupo(self, token: str, siguiente: _Token | None) -> bool:
+    def _es_grupo(self, mensaje: str, utiles: Sequence[_Token], k: int) -> bool:
         """Sustantivo del grupo: idéntico, en singular o sin diminutivo. Un error leve
-        ("nranjita", "friijol") solo cuenta en grupos de 5 letras o más y si la palabra
-        siguiente aporta evidencia del mismo grupo (un número, una medida, una marca o una
-        variante): así "Claro que sí" no activa el cloro ni "papito" las papitas."""
-        if any(peso_coincidencia(token, g) >= PESO_SENAL for g in self.grupos):
+        ("nranjita", "friijol"; similitud >= 80 %) solo cuenta en grupos de 5 letras o más y
+        con evidencia adyacente del **mismo** grupo:
+        - una marca o una variante de ese grupo ("friijol negro"), o
+        - un número que sea una presentación compatible con algún producto del grupo
+          ("nranjita 600 ml", "narannjita 1.5"); un número cualquiera ("claro 2 veces",
+          "harían 3 viajes") no es evidencia.
+        Un signo de puntuación entre la palabra y la evidencia la anula ("Claro, 2 de …")."""
+        token = utiles[k]
+        if any(peso_coincidencia(token.texto, g) >= PESO_SENAL for g in self.grupos):
             return True
-        if siguiente is None:
+        if k + 1 >= len(utiles):
             return False
+        siguiente = utiles[k + 1]
+        if _PUNTUACION.search(mensaje[token.fin : siguiente.inicio]):
+            return False
+        medidas = None
+        if any(c.isdigit() for c in siguiente.texto):
+            fin = siguiente.fin
+            if k + 2 < len(utiles) and utiles[k + 2].texto in UNIDADES_MEDIDA and not mensaje[fin : utiles[k + 2].inicio].strip():
+                fin = utiles[k + 2].fin  # "600 ml": el número con su unidad
+            medidas = extraer_medidas(mensaje[siguiente.inicio : fin])
         for g in self.grupos:
-            if len(g) >= MIN_LETRAS_APROXIMADO and peso_coincidencia(token, g) >= PESO_APROXIMADO:
-                if any(c.isdigit() for c in siguiente.texto):
+            if len(g) < MIN_LETRAS_APROXIMADO or peso_coincidencia(token.texto, g) < PESO_APROXIMADO:
+                continue
+            if medidas is not None:
+                if medidas and any(self.indice.compatible_con_medidas(s, medidas) for s in self.indice.por_grupo[g]):
                     return True
-                if any(peso_coincidencia(siguiente.texto, v) >= PESO_SENAL for v in self.vocabulario_grupo[g]):
-                    return True
+            elif any(peso_coincidencia(siguiente.texto, v) >= PESO_SENAL for v in self.vocabulario_grupo[g]):
+                return True
         return False
 
     def _es_unidad(self, token: str) -> bool:
@@ -218,8 +243,7 @@ class DetectorOmisiones:
             for k, t in enumerate(utiles):
                 if any(c.isdigit() for c in t.texto):
                     continue
-                siguiente = utiles[k + 1] if k + 1 < len(utiles) else None
-                if self._es_grupo(t.texto, siguiente):
+                if self._es_grupo(mensaje, utiles, k):
                     resultado.append(Senal(TipoSenal.S1, Span(indice, t.inicio, t.fin)))
             # S1: alias o nombre completo (tokens significativos consecutivos).
             for frase in self.frases:
@@ -271,9 +295,32 @@ class DetectorOmisiones:
             return not any(c.contiene(span) for c in puras)
 
         tipos = {s.tipo for s in senales if fuera(s.span)}
+        renglones = [s for s in senales if s.tipo is TipoSenal.S4 and fuera(s.span)]
+        productos = [s.span for s in senales if s.tipo is TipoSenal.S1]
+
+        def lista_valida(o: Oracion) -> bool:
+            """Revisión del PR #5: un renglón aislado solo vale como lista si contiene una
+            señal S1; dos o más renglones S4 en el mismo mensaje valen como lista aunque sus
+            productos no estén en el catálogo."""
+            del_mensaje = [r for r in renglones if r.span.mensaje == o.span.mensaje]
+            if len(del_mensaje) >= 2:
+                return True
+            return any(
+                r.span.interseccion(o.span) > 0 and any(r.span.contiene(p) for p in productos) for r in del_mensaje
+            )
+
+        def compra(o: Oracion) -> bool:
+            if not o.marcador_compra or o.consulta_pura:
+                return False
+            if not _LISTA_E1B1.match(o.texto):
+                return True
+            # El reconocedor de E1b-1 cuenta la oración como renglón de lista ("x: n" o viñeta):
+            # vale si tiene otro marcador de compra o si es una lista válida.
+            return tiene_marcador_compra(_SIN_LISTA + o.texto) or lista_valida(o)
+
         return Contexto(
             c1_evento=hay_eventos_efectivos,
-            c2_compra=any(o.marcador_compra and not o.consulta_pura for o in oraciones),
+            c2_compra=any(compra(o) for o in oraciones),
             c3_lista=TipoSenal.S4 in tipos,
             c4_cantidad=TipoSenal.S2 in tipos,
             c5_habitual=TipoSenal.S3 in tipos,

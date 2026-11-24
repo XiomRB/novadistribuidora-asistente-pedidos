@@ -136,7 +136,10 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
   "juguitos"), los productos fuera del catálogo ("recargas", "gas propano") ni los errores en
   marcas ("bellla", "qutezal"): 7 de 166 menciones quitadas en los casos de desarrollo. Medirlo
   en E3 (tasa de omisiones no detectadas con el LLM real).
-- **Pendiente de decisión (revisión del PR #5):** pruebas `xfail(strict=True)` en
-  `tests/unit/test_omisiones.py` y `tests/referencia/test_pedido_qn1.py` documentan dos falsos
-  positivos del detector (S1 aproximada con un número que no es presentación; C2 activado por
-  una línea "x: n" sin producto). No quitar las marcas sin la decisión correspondiente.
+- **Reglas autorizadas en la revisión del PR #5** (`omisiones.py`, sin tocar `consultas.py`):
+  - S1 aproximada (>= 80 %, grupos de 5 letras o más): un número solo es evidencia si es una
+    presentación compatible con el grupo; un signo de puntuación entre la palabra y la evidencia
+    la anula. No ampliar la tolerancia ni reducir los requisitos de evidencia.
+  - C2: si el único marcador de compra de una oración es el patrón de lista de E1b-1, solo
+    cuenta como lista válida (renglón S4 con una señal S1, o dos o más renglones S4 en el mismo
+    mensaje). C4 sigue activando el contexto por su cuenta.
