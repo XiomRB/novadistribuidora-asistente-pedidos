@@ -1,0 +1,697 @@
+{
+  "version": 1,
+  "casos": {
+    "D001": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [45, 84], "producto": [60, 84], "presentacion": null, "unidad_texto": [48, 56], "candidatos": [], "cantidad": "72", "cantidad_incierta": false, "unidad": "suelta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [86, 110], "producto": [91, 110], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [113, 140], "producto": [115, 140], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D002": {
+      "eventos": [
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D003": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [29, 61], "producto": [41, 61], "presentacion": null, "unidad_texto": [31, 37], "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [64, 77], "producto": [64, 74], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D004": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [44, 85], "producto": [60, 85], "presentacion": null, "unidad_texto": [48, 56], "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [98, 124], "producto": [112, 124], "presentacion": null, "unidad_texto": [101, 108], "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D005": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [23, 48], "producto": [37, 48], "presentacion": null, "unidad_texto": [26, 33], "candidatos": [], "cantidad": "10", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [51, 66], "producto": [51, 66], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D006": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [44, 78], "producto": [56, 78], "presentacion": null, "unidad_texto": [47, 52], "candidatos": [], "cantidad": "15", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D007": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [22, 45], "producto": [34, 45], "presentacion": null, "unidad_texto": [25, 30], "candidatos": [], "cantidad": "10", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [47, 71], "producto": [60, 71], "presentacion": null, "unidad_texto": [50, 56], "candidatos": [], "cantidad": "15", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [73, 99], "producto": [87, 99], "presentacion": null, "unidad_texto": [75, 83], "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e4", "tipo": "agregar", "m": 0, "texto": [102, 127], "producto": [108, 127], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D008": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [9, 17], "producto": [9, 14], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [19, 49], "producto": [34, 49], "presentacion": null, "unidad_texto": [24, 30], "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [52, 90], "producto": [64, 90], "presentacion": null, "unidad_texto": [55, 60], "candidatos": [], "cantidad": "12", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D009": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [14, 32], "producto": [14, 29], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [34, 56], "producto": [41, 56], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [58, 78], "producto": [60, 78], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e4", "tipo": "agregar", "m": 0, "texto": [81, 103], "producto": [92, 103], "presentacion": null, "unidad_texto": [83, 88], "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D010": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [19, 39], "producto": [29, 39], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D011": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [27, 42], "producto": [29, 42], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D012": {
+      "eventos": [
+        {"id": "e1", "tipo": "habitual", "m": 0, "texto": [29, 52], "producto": null, "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [55, 71], "producto": [55, 68], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D013": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [18, 41], "producto": [20, 41], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [43, 60], "producto": [43, 57], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [63, 79], "producto": [63, 76], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D014": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [25, 56], "producto": [30, 56], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [59, 69], "producto": [64, 69], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D015": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [16, 46], "producto": [18, 46], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [49, 61], "producto": [49, 61], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D016": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [18, 44], "producto": [20, 44], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D017": {
+      "eventos": [
+        {"id": "e1", "tipo": "habitual", "m": 0, "texto": [28, 45], "producto": null, "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D018": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [20, 55], "producto": [39, 55], "presentacion": null, "unidad_texto": [27, 35], "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D019": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [13, 30], "producto": [13, 27], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [32, 67], "producto": [45, 67], "presentacion": null, "unidad_texto": [35, 41], "candidatos": [], "cantidad": "12", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [70, 101], "producto": [76, 101], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D020": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [22, 38], "producto": [27, 38], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [41, 63], "producto": [41, 60], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "corregir", "m": 0, "texto": [77, 111], "producto": [91, 111], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": "e2"}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D021": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [10, 50], "producto": [25, 50], "presentacion": null, "unidad_texto": [15, 21], "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [52, 91], "producto": [64, 91], "presentacion": null, "unidad_texto": [54, 60], "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [94, 137], "producto": [111, 137], "presentacion": null, "unidad_texto": [99, 107], "candidatos": [], "cantidad": "10", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e4", "tipo": "corregir", "m": 0, "texto": [148, 182], "producto": [151, 176], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": "e1"}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D022": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [25, 44], "producto": [27, 44], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D023": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [38, 68], "producto": [40, 68], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [70, 99], "producto": [81, 99], "presentacion": null, "unidad_texto": [72, 77], "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [102, 126], "producto": [102, 123], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D024": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [9, 40], "producto": [22, 40], "presentacion": null, "unidad_texto": [12, 18], "candidatos": [], "cantidad": "36", "cantidad_incierta": false, "unidad": "suelta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D025": {
+      "eventos": [
+        {"id": "e1", "tipo": "habitual", "m": 0, "texto": [31, 57], "producto": null, "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "quitar", "m": 0, "texto": [59, 79], "producto": [67, 79], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D026": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [26, 49], "producto": [38, 49], "presentacion": null, "unidad_texto": [28, 34], "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [60, 76], "producto": [60, 76], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D027": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [31, 65], "producto": [38, 65], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [68, 101], "producto": [83, 101], "presentacion": null, "unidad_texto": [71, 79], "candidatos": [], "cantidad": "24", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D028": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [24, 40], "producto": [26, 40], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [43, 53], "producto": [43, 53], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D029": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [41, 59], "producto": [43, 59], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [62, 95], "producto": [73, 95], "presentacion": null, "unidad_texto": [64, 69], "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D030": {
+      "eventos": [
+        {"id": "e1", "tipo": "habitual", "m": 0, "texto": [9, 35], "producto": null, "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D031": {
+      "eventos": [
+        {"id": "e1", "tipo": "habitual", "m": 0, "texto": [9, 29], "producto": null, "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [32, 60], "producto": [38, 60], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D032": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [23, 44], "producto": [36, 44], "presentacion": null, "unidad_texto": [26, 32], "candidatos": [], "cantidad": "24", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [46, 84], "producto": [58, 84], "presentacion": null, "unidad_texto": [49, 54], "candidatos": [], "cantidad": "10", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [87, 116], "producto": [102, 116], "presentacion": null, "unidad_texto": [92, 98], "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D033": {
+      "eventos": [
+        {"id": "e1", "tipo": "habitual", "m": 0, "texto": [15, 41], "producto": null, "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [44, 75], "producto": [56, 75], "presentacion": null, "unidad_texto": [46, 52], "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D034": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [15, 48], "producto": [20, 48], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [50, 70], "producto": [55, 70], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [73, 95], "producto": [75, 95], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D035": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [16, 38], "producto": [25, 38], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [40, 60], "producto": [40, 57], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [63, 95], "producto": [68, 95], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D036": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [22, 44], "producto": [37, 44], "presentacion": null, "unidad_texto": [28, 33], "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [46, 61], "producto": [48, 61], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [64, 77], "producto": [66, 77], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D037": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [16, 39], "producto": [21, 39], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [42, 85], "producto": [54, 85], "presentacion": null, "unidad_texto": [44, 50], "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D038": {
+      "eventos": [
+      ],
+      "consultas": [{"m": 0, "i": 15, "f": 46}],
+      "instrucciones_rechazadas": []
+    },
+    "D039": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [17, 38], "producto": [33, 38], "presentacion": null, "unidad_texto": [21, 29], "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "suelta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [40, 59], "producto": [42, 59], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [62, 77], "producto": [62, 74], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D040": {
+      "eventos": [
+        {"id": "e1", "tipo": "habitual", "m": 0, "texto": [32, 58], "producto": null, "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [61, 80], "producto": [63, 80], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "quitar", "m": 0, "texto": [87, 109], "producto": [91, 109], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D041": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [23, 49], "producto": [37, 49], "presentacion": null, "unidad_texto": [25, 33], "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [52, 69], "producto": [60, 69], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "corregir", "m": 0, "texto": [80, 104], "producto": [83, 95], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "8", "cantidad_incierta": false, "unidad": "no_indicada", "ref": "e1"}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D042": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [22, 49], "producto": [27, 49], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [51, 65], "producto": [51, 62], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [68, 101], "producto": [82, 101], "presentacion": null, "unidad_texto": [73, 78], "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D043": {
+      "eventos": [
+        {"id": "e1", "tipo": "habitual", "m": 0, "texto": [27, 47], "producto": null, "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 1, "texto": [9, 32], "producto": [14, 32], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D044": {
+      "eventos": [
+        {"id": "e1", "tipo": "habitual", "m": 0, "texto": [42, 62], "producto": null, "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [65, 90], "producto": [76, 90], "presentacion": null, "unidad_texto": [67, 72], "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D045": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [41, 60], "producto": [41, 57], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [63, 82], "producto": [63, 78], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D046": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [42, 58], "producto": [42, 55], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [61, 82], "producto": [63, 82], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D047": {
+      "eventos": [
+        {"id": "e1", "tipo": "habitual", "m": 0, "texto": [37, 63], "producto": null, "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 1, "texto": [10, 29], "producto": [15, 29], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 1, "texto": [32, 59], "producto": [36, 59], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D048": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [9, 27], "producto": [9, 24], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [30, 56], "producto": [45, 56], "presentacion": null, "unidad_texto": [32, 41], "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "otra", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D049": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [16, 41], "producto": [16, 38], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [44, 79], "producto": [58, 79], "presentacion": null, "unidad_texto": [46, 54], "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D050": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [41, 77], "producto": [56, 77], "presentacion": null, "unidad_texto": [44, 52], "candidatos": [], "cantidad": "36", "cantidad_incierta": false, "unidad": "suelta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D051": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [32, 60], "producto": [47, 60], "presentacion": null, "unidad_texto": [35, 43], "candidatos": [], "cantidad": "12", "cantidad_incierta": false, "unidad": "suelta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [63, 85], "producto": [74, 85], "presentacion": null, "unidad_texto": [65, 70], "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D052": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [22, 61], "producto": [34, 61], "presentacion": null, "unidad_texto": [26, 30], "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [64, 103], "producto": [77, 103], "presentacion": null, "unidad_texto": [68, 73], "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D053": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [51, 69], "producto": [61, 69], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [78, 116], "producto": [86, 116], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [124, 151], "producto": [138, 151], "presentacion": null, "unidad_texto": [129, 134], "candidatos": [], "cantidad": "10", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D054": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [26, 52], "producto": [39, 52], "presentacion": null, "unidad_texto": [29, 35], "candidatos": [], "cantidad": "20", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [55, 72], "producto": [57, 72], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "corregir", "m": 1, "texto": [7, 38], "producto": [10, 30], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": "e2"}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D055": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [22, 37], "producto": [24, 37], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D056": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [35, 64], "producto": [50, 64], "presentacion": null, "unidad_texto": [38, 46], "candidatos": [], "cantidad": "48", "cantidad_incierta": false, "unidad": "suelta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [67, 99], "producto": [72, 99], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D057": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [17, 51], "producto": [29, 51], "presentacion": null, "unidad_texto": [19, 25], "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [53, 71], "producto": [58, 71], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [73, 106], "producto": [78, 106], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e4", "tipo": "agregar", "m": 0, "texto": [109, 139], "producto": [126, 139], "presentacion": null, "unidad_texto": [114, 122], "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D058": {
+      "eventos": [
+        {"id": "e1", "tipo": "habitual", "m": 0, "texto": [48, 65], "producto": null, "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 1, "texto": [13, 35], "producto": [21, 35], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D059": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [30, 56], "producto": [34, 56], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [57, 97], "producto": [71, 97], "presentacion": null, "unidad_texto": [60, 67], "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [100, 133], "producto": [116, 133], "presentacion": null, "unidad_texto": [106, 112], "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D060": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [26, 45], "producto": [31, 45], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [48, 78], "producto": [55, 78], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D061": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [35, 72], "producto": [50, 72], "presentacion": null, "unidad_texto": [38, 46], "candidatos": [], "cantidad": "72", "cantidad_incierta": false, "unidad": "suelta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D062": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [22, 49], "producto": [34, 49], "presentacion": null, "unidad_texto": [25, 30], "candidatos": [], "cantidad": "15", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [51, 70], "producto": [53, 70], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [73, 88], "producto": [75, 88], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e4", "tipo": "corregir", "m": 0, "texto": [99, 139], "producto": [102, 132], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "16", "cantidad_incierta": false, "unidad": "no_indicada", "ref": "e1"}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D063": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [13, 33], "producto": [15, 33], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D064": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [22, 50], "producto": [27, 50], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [53, 61], "producto": [53, 58], "presentacion": null, "unidad_texto": null, "candidatos": ["B01", "B02", "B03"], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D065": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [29, 60], "producto": [41, 60], "presentacion": null, "unidad_texto": [32, 37], "candidatos": [], "cantidad": "10", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [62, 87], "producto": [77, 87], "presentacion": null, "unidad_texto": [65, 73], "candidatos": [], "cantidad": "36", "cantidad_incierta": false, "unidad": "suelta", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [90, 105], "producto": [92, 105], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D066": {
+      "eventos": [
+      ],
+      "consultas": [{"m": 0, "i": 13, "f": 39}],
+      "instrucciones_rechazadas": []
+    },
+    "D067": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [29, 59], "producto": [42, 59], "presentacion": null, "unidad_texto": [31, 38], "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [62, 107], "producto": [77, 107], "presentacion": null, "unidad_texto": [68, 73], "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [110, 140], "producto": [112, 140], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D068": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [34, 47], "producto": [34, 44], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [50, 66], "producto": [50, 63], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [69, 80], "producto": [69, 80], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D069": {
+      "eventos": [
+      ],
+      "consultas": [{"m": 0, "i": 13, "f": 44}],
+      "instrucciones_rechazadas": []
+    },
+    "D070": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [33, 60], "producto": [43, 60], "presentacion": null, "unidad_texto": [35, 39], "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [62, 102], "producto": [74, 102], "presentacion": null, "unidad_texto": [65, 70], "candidatos": [], "cantidad": "12", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [105, 122], "producto": [107, 122], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e4", "tipo": "corregir", "m": 1, "texto": [9, 33], "producto": [12, 27], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "no_indicada", "ref": "e3"}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D071": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [14, 30], "producto": [14, 27], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [33, 57], "producto": [35, 57], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D072": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [9, 25], "producto": [9, 22], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [27, 52], "producto": [27, 49], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [54, 80], "producto": [67, 80], "presentacion": null, "unidad_texto": [57, 63], "candidatos": [], "cantidad": "20", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e4", "tipo": "agregar", "m": 0, "texto": [83, 102], "producto": [88, 102], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D073": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [23, 50], "producto": [23, 47], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [53, 74], "producto": [64, 74], "presentacion": null, "unidad_texto": [55, 60], "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 1, "texto": [19, 37], "producto": [24, 37], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e4", "tipo": "corregir", "m": 2, "texto": [9, 50], "producto": [12, 40], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "9", "cantidad_incierta": false, "unidad": "no_indicada", "ref": "e2"}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D074": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [20, 35], "producto": [20, 32], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [38, 70], "producto": [51, 70], "presentacion": null, "unidad_texto": [41, 47], "candidatos": [], "cantidad": "48", "cantidad_incierta": false, "unidad": "suelta", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [73, 94], "producto": [78, 94], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D075": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [19, 44], "producto": [30, 44], "presentacion": null, "unidad_texto": [21, 26], "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [47, 93], "producto": [64, 93], "presentacion": null, "unidad_texto": [54, 60], "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D076": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [25, 50], "producto": [25, 47], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 1, "texto": [26, 44], "producto": [26, 41], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "corregir", "m": 2, "texto": [7, 31], "producto": [10, 23], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "no_indicada", "ref": "e1"}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D077": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [27, 40], "producto": [27, 37], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [43, 60], "producto": [48, 60], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e3", "tipo": "agregar", "m": 1, "texto": [6, 45], "producto": [20, 45], "presentacion": null, "unidad_texto": [8, 16], "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e4", "tipo": "agregar", "m": 1, "texto": [48, 67], "producto": [53, 67], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e5", "tipo": "corregir", "m": 2, "texto": [0, 35], "producto": [18, 35], "presentacion": null, "unidad_texto": [8, 14], "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "venta", "ref": "e2"}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D078": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [23, 42], "producto": [28, 42], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "4", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [53, 69], "producto": [53, 69], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D079": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [26, 52], "producto": [38, 52], "presentacion": null, "unidad_texto": [28, 34], "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [55, 76], "producto": [60, 76], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "3", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D080": {
+      "eventos": [
+        {"id": "e1", "tipo": "habitual", "m": 1, "texto": [11, 24], "producto": null, "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": null, "cantidad_incierta": false, "unidad": "no_indicada", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 2, "texto": [10, 35], "producto": [22, 35], "presentacion": null, "unidad_texto": [14, 18], "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D081": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [10, 42], "producto": [22, 42], "presentacion": null, "unidad_texto": [12, 18], "candidatos": [], "cantidad": "5", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "corregir", "m": 0, "texto": [55, 65], "producto": null, "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "6", "cantidad_incierta": false, "unidad": "no_indicada", "ref": "e1"},
+        {"id": "e3", "tipo": "agregar", "m": 0, "texto": [69, 86], "producto": [74, 86], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D082": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [15, 32], "producto": [26, 32], "presentacion": null, "unidad_texto": [17, 22], "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "venta", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [35, 60], "producto": [42, 60], "presentacion": null, "unidad_texto": null, "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "no_indicada", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    },
+    "D083": {
+      "eventos": [
+      ],
+      "consultas": [{"m": 0, "i": 0, "f": 44}],
+      "instrucciones_rechazadas": []
+    },
+    "D084": {
+      "eventos": [
+        {"id": "e1", "tipo": "agregar", "m": 0, "texto": [8, 36], "producto": [22, 36], "presentacion": null, "unidad_texto": [12, 18], "candidatos": [], "cantidad": "1", "cantidad_incierta": false, "unidad": "docena", "ref": null},
+        {"id": "e2", "tipo": "agregar", "m": 0, "texto": [39, 64], "producto": [51, 64], "presentacion": null, "unidad_texto": [41, 47], "candidatos": [], "cantidad": "2", "cantidad_incierta": false, "unidad": "venta", "ref": null}
+      ],
+      "consultas": [],
+      "instrucciones_rechazadas": []
+    }
+  }
+}

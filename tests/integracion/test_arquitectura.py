@@ -1,4 +1,4 @@
-"""Límites de arquitectura: el dominio no depende de LLM, red, MLflow ni FastAPI y no usa float."""
+"""Límites de arquitectura: el dominio y los mensajes no dependen de LLM, red, MLflow ni FastAPI y no usan float."""
 
 import ast
 from pathlib import Path
@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
-PAQUETES = ["app/datos", "app/dominio"]
+PAQUETES = ["app/datos", "app/dominio", "app/mensajes"]
 IMPORTS_PROHIBIDOS = {
     "langchain",
     "langchain_core",

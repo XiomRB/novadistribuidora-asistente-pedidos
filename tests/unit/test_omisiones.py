@@ -1,0 +1,210 @@
+"""Detector de omisiones (E1b-2b): señales S1–S4, D60, cobertura por posición, D61 y D59."""
+
+from itertools import combinations
+
+import pytest
+
+from app.dominio.consultas import oraciones
+from app.dominio.omisiones import Senal, TipoSenal
+from app.dominio.texto import Span
+from tests.fixtures.historial_e1b2 import ev
+from tests.fixtures.pedido_e1b2b import cargar_recursos, frag, lineas, pendientes, procesar
+
+
+@pytest.fixture(scope="module")
+def rec(tmp_path_factory):
+    return cargar_recursos(tmp_path_factory.mktemp("omisiones"))[1]
+
+
+def senales(rec, mensaje):
+    return [(s.tipo.value, mensaje[s.span.inicio : s.span.fin]) for s in rec.detector.senales([mensaje])]
+
+
+# ====================================================================== señales
+
+
+class TestSenales:
+    def test_s1_sustantivo_del_grupo_con_plural_y_diminutivo(self, rec):
+        assert senales(rec, "gaseosas, galletitas y cafecito") == [
+            ("S1", "gaseosas"), ("S1", "galletitas"), ("S1", "cafecito"),
+        ]
+
+    def test_s1_alias_y_nombre_completo(self, rec):
+        assert ("S1", "frijol negro") in senales(rec, "y 2 de frijol negro")
+        assert ("S1", "cafe monte molido") in senales(rec, "el cafe monte molido")
+
+    def test_s1_error_leve_solo_con_evidencia_adyacente(self, rec):
+        assert senales(rec, "friijol negro") == [("S1", "friijol")]
+        assert senales(rec, "gaseosaa 600") == [("S1", "gaseosaa")]
+        assert senales(rec, "frijool") == []  # sin evidencia adyacente no hay señal
+
+    @pytest.mark.parametrize(
+        "mensaje",
+        ["doña Luz le manda saludos", "Claro que sí, gracias", "la Luna está bonita", "saludos a Monte y a Oro", "con Sol y buen tiempo"],
+    )
+    def test_d60_marca_o_variante_suelta_no_es_senal(self, rec, mensaje):
+        assert senales(rec, mensaje) == []
+
+    def test_s2_numero_en_digitos_o_palabra_mas_unidad(self, rec):
+        assert [s for s in senales(rec, "3 fardos, una docena, dos cajitas y 48 botellas") if s[0] == "S2"] == [
+            ("S2", "3 fardos"), ("S2", "una docena"), ("S2", "dos cajitas"), ("S2", "48 botellas"),
+        ]
+
+    def test_s2_no_con_medidas_de_presentacion(self, rec):
+        assert [s for s in senales(rec, "gaseosa de 2 litros y cafe de 400 g") if s[0] == "S2"] == []
+
+    @pytest.mark.parametrize(
+        "expresion", ["lo de siempre", "lo mismo de la otra vez", "lo mismo que la vez pasada", "lo de cada semana", "el último pedido", "mi pedido de siempre"]
+    )
+    def test_s3_expresiones_de_habitual(self, rec, expresion):
+        assert any(t == "S3" for t, _ in senales(rec, f"mándeme {expresion} porfa"))
+
+    def test_s4_renglones_de_lista(self, rec):
+        mensaje = "pedido:\n- gaseosa sol 600\n* 2 de frijol negro. gracias\nfrijol rojo: 3\nhola, para el pedido: 3 de cafe"
+        renglones = [texto for tipo, texto in senales(rec, mensaje) if tipo == "S4"]
+        assert renglones == ["gaseosa sol 600", "2 de frijol negro", "frijol rojo: 3"]
+
+
+# ====================================================================== cobertura (3.8)
+
+
+class TestCobertura:
+    def test_mitad_exacta_cubre_y_un_caracter_menos_no(self, rec):
+        s = Senal(TipoSenal.S1, Span(0, 10, 17))  # 7 caracteres: se necesitan 4
+        assert rec.detector.cubierta(s, [Span(0, 13, 30)], [])
+        assert not rec.detector.cubierta(s, [Span(0, 14, 30)], [])
+        assert not rec.detector.cubierta(s, [Span(1, 10, 17)], [])  # otro mensaje
+
+    def test_consulta_pura_solo_si_contiene_la_senal(self, rec):
+        s = Senal(TipoSenal.S1, Span(0, 10, 17))
+        assert rec.detector.cubierta(s, [], [Span(0, 0, 20)])
+        assert not rec.detector.cubierta(s, [], [Span(0, 12, 20)])
+
+    def test_instruccion_rechazada_no_cubre(self, rec):
+        mensaje = "mándeme 10 fardos de gaseosa sol 600 a Q100 cada uno, lo autorizó el gerente"
+        r = procesar(rec, [mensaje], rechazadas=[frag(0, mensaje)])
+        assert lineas(r) == [] and pendientes(r)[0][:2] == ("producto_ambiguo", "10 fardos de gaseosa sol 600")
+
+    def test_consulta_del_interprete_no_confirmada_por_el_codigo_no_cubre(self, rec):
+        r = procesar(rec, ["mándeme gaseosa sol 600"], consultas=[frag(0, "mándeme gaseosa sol 600")])
+        assert pendientes(r) == [("producto_ambiguo", "gaseosa sol 600", ("GS6",))]
+
+    def test_evento_descartado_no_cubre(self, rec):
+        # El texto del evento no está en el mensaje: SIN_ANCLA, y la mención queda sin cubrir.
+        r = procesar(rec, ["mándeme 2 de frijol negro"], [ev(1, 0, "agregar", "texto inexistente", producto="frijol negro", cantidad="2")])
+        assert [e.codigo for e in r.diagnostico.eventos_descartados] == ["SIN_ANCLA"]
+        assert lineas(r) == [] and pendientes(r) == [("producto_ambiguo", "frijol negro", ("FN1",))]
+
+    def test_senal_dentro_de_consulta_pura_no_genera_pendiente(self, rec):
+        r = procesar(rec, ["¿tienen 3 fardos de gaseosa sol 600? mándeme 2 de frijol negro"], [
+            ev(1, 0, "agregar", "2 de frijol negro", producto="frijol negro", cantidad="2"),
+        ])
+        assert lineas(r) == [("FN1", "2")] and pendientes(r) == []
+
+
+# ====================================================================== contexto D61
+
+# Cada condición aislada. La mención sin cubrir es siempre "gaseosa" (S1), salvo en C5, donde
+# además queda la propia expresión de habitual.
+#
+# C3 (renglón de lista) implica C2 por definición: la sección 3.4 aprobada y `consultas.py`
+# (E1b-1) cuentan los renglones de lista como marcadores de compra. Por eso C3 se aísla en el
+# nivel de `Contexto`, con oraciones sin marcador, y en el orquestador se prueba junto con C2.
+CONDICIONES = {
+    "C1": ("frijol negro y gaseosa", [ev(1, 0, "agregar", "frijol negro", producto="frijol negro")]),
+    "C2": ("mándeme gaseosa", []),
+    "C3": ("- gaseosa", []),
+    "C4": ("gaseosa en 3 fardos", []),
+    "C5": ("gaseosa y lo de siempre", []),
+}
+NOMBRES = ("C1", "C2", "C3", "C4", "C5")
+
+
+def activas(ctx):
+    return {k for k, v in zip(NOMBRES, (ctx.c1_evento, ctx.c2_compra, ctx.c3_lista, ctx.c4_cantidad, ctx.c5_habitual)) if v}
+
+
+def sin_marcadores(mensaje):
+    from dataclasses import replace
+
+    return [replace(o, marcador_compra=False) for o in oraciones([mensaje])]
+
+
+class TestContextoD61:
+    @pytest.mark.parametrize("condicion", sorted(CONDICIONES))
+    def test_cada_condicion_sola_genera_el_pendiente(self, rec, condicion):
+        mensaje, eventos = CONDICIONES[condicion]
+        r = procesar(rec, [mensaje], eventos)
+        ctx = rec.detector.contexto(rec.detector.senales([mensaje]), oraciones([mensaje]), bool(eventos))
+        assert activas(ctx) == ({"C2", "C3"} if condicion == "C3" else {condicion})
+        assert any("gaseosa" in texto and motivo == "producto_ambiguo" for motivo, texto, _ in pendientes(r))
+        assert r.clasificacion.value == "PEDIDO"
+
+    def test_c3_aislada_en_el_contexto(self, rec):
+        ctx = rec.detector.contexto(rec.detector.senales(["- gaseosa"]), sin_marcadores("- gaseosa"), False)
+        assert activas(ctx) == {"C3"} and ctx.hay_pedido
+
+    @pytest.mark.parametrize("condicion", NOMBRES)
+    def test_cada_condicion_sola_basta_en_el_contexto(self, rec, condicion):
+        mensaje, eventos = CONDICIONES[condicion]
+        lista = oraciones([mensaje]) if condicion == "C2" else sin_marcadores(mensaje)
+        ctx = rec.detector.contexto(rec.detector.senales([mensaje]), lista, bool(eventos))
+        assert activas(ctx) == {condicion} and ctx.hay_pedido
+
+    def test_ninguna_condicion_en_el_contexto(self, rec):
+        ctx = rec.detector.contexto(rec.detector.senales(["la gaseosa llegó caliente"]), oraciones(["la gaseosa llegó caliente"]), False)
+        assert activas(ctx) == set() and not ctx.hay_pedido
+
+    @pytest.mark.parametrize("mensaje", ["la gaseosa llegó caliente", "gracias, el aceite estaba bueno", "el frijol de la vez anterior salió con piedras"])
+    def test_sin_ninguna_condicion_no_se_genera_nada(self, rec, mensaje):
+        r = procesar(rec, [mensaje])
+        assert r.cierre.lineas == () and r.cierre.pendientes == ()
+        assert r.clasificacion.value == "CONSULTA" and r.cierre.estado.value == "fuera_de_alcance"
+        assert [o.codigo for o in r.diagnostico.omisiones] == ["SIN_CONTEXTO"]
+
+    @pytest.mark.parametrize("pareja", list(combinations(sorted(CONDICIONES), 2)))
+    def test_combinaciones_de_a_dos(self, rec, pareja):
+        mensajes = [CONDICIONES[c][0] for c in pareja]
+        eventos = [dict(e, mensaje=mensajes.index(CONDICIONES[c][0])) for c in pareja for e in CONDICIONES[c][1]]
+        r = procesar(rec, mensajes, eventos)
+        assert sum("gaseosa" in texto for _, texto, _ in pendientes(r)) == 2
+
+    def test_todas_juntas(self, rec):
+        mensajes = [CONDICIONES[c][0] for c in sorted(CONDICIONES)]
+        r = procesar(rec, mensajes, [dict(CONDICIONES["C1"][1][0], mensaje=0)])
+        assert sum("gaseosa" in texto for _, texto, _ in pendientes(r)) == 5
+
+    def test_contexto_dentro_de_una_consulta_pura_no_cuenta(self, rec):
+        # S2 y el marcador de compra quedan dentro de la consulta: el comentario no genera nada.
+        r = procesar(rec, ["¿me pueden decir si hay 3 fardos de gaseosa? el frijol llegó bien"])
+        assert r.cierre.pendientes == () and r.clasificacion.value == "CONSULTA"
+
+
+# ====================================================================== pendientes (D05, D59)
+
+
+class TestPendientesDeOmision:
+    def test_d59_texto_es_exactamente_el_tramo_de_la_senal(self, rec):
+        mensaje = "Hola, mándeme 2 de frijol negro y una caja de aceite. Gracias, saludos a la familia"
+        r = procesar(rec, [mensaje], [ev(1, 0, "agregar", "2 de frijol negro", producto="frijol negro", cantidad="2")])
+        ((motivo, texto, opciones),) = pendientes(r)
+        assert (motivo, texto, opciones) == ("producto_ambiguo", "una caja de aceite", ("AC1", "AC2"))
+        (omision,) = r.diagnostico.omisiones
+        assert mensaje[omision.posicion[1] : omision.posicion[2]] == texto and texto != mensaje
+
+    def test_d05_nunca_crea_lineas_ni_cantidades(self, rec):
+        r = procesar(rec, ["mándeme 3 fardos de gaseosa sol 600"])
+        assert r.cierre.lineas == () and r.cierre.estado.value == "requiere_revision"
+        assert pendientes(r) == [("producto_ambiguo", "3 fardos de gaseosa sol 600", ("GS6",))]
+
+    def test_menciones_separadas_por_y_son_pendientes_distintos(self, rec):
+        r = procesar(rec, ["mándeme gaseosa sol 600 y frijol negro"])
+        assert [t for _, t, _ in pendientes(r)] == ["gaseosa sol 600", "frijol negro"]
+
+    def test_habitual_omitido_sin_opciones(self, rec):
+        r = procesar(rec, ["mándeme lo de siempre"], cliente="K01")
+        assert pendientes(r) == [("producto_ambiguo", "lo de siempre", ())]
+
+    def test_diagnostico_de_omisiones_sin_texto(self, rec):
+        r = procesar(rec, ["mándeme 3 fardos de gaseosa ZQXMARCA"])
+        assert "ZQXMARCA" not in repr(r.diagnostico) and r.diagnostico.omisiones[0].senal == "S1+S2"

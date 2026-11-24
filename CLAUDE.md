@@ -83,9 +83,29 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
     - `sustitucion.py`: sustituciones después del plegado, fusionadas en la primera posición.
     - `diagnostico.py`: solo códigos, posiciones, SKU, cantidades y medidas normalizadas; nunca
       textos, `cliente_id` ni `pedido_id` (el habitual se registra como `habitual_usado`, D74).
+  - E1b-2b:
+    - `omisiones.py`: señales S1 (grupo, alias o nombre completo; nunca marca o variante
+      suelta, D60), S2 (número + unidad), S3 (habitual) y S4 (renglón de lista). Cobertura por
+      posición (`|S∩E| >= ceil(|S|/2)` con un evento efectivo, o S dentro de una consulta pura
+      del código); las rechazadas y los descartados nunca cubren. Contexto D61 (C1–C5). Pendiente
+      `producto_ambiguo` con el tramo exacto de la señal (D59); nunca crea líneas (D05).
+    - `clasificacion.py`: `CONSULTA`, `PEDIDO_CANCELADO`, `SIN_EFECTO`, `PEDIDO`, de la que sale
+      `hay_eventos_pedido` para el cierre de E1a.
+    - `pedido.py`: `procesar_pedido(entrada, interpretacion, datos, indice=None, lexico=None,
+      recursos=None)`. Orden obligatorio: cliente (`ClienteNoEncontrado`), luego
+      `validar_interpretacion` (D72) **antes** del anclaje, anclaje y descartes (`SIN_ANCLA`,
+      `DESCARTADO_CONSULTA`), plegado, sustituciones, omisiones, clasificación, cierre de E1a,
+      mensaje y diagnóstico. Pendientes en el orden D64. `Recursos` precomputa índice, léxico,
+      vocabulario, detector y redactor (D68).
+- `app/mensajes/confirmacion.py`: mensaje al cliente con plantillas (D16 sin montos, D49, D65,
+  saludo y fecha según 3.6). Nunca usa texto del cliente ni el texto de los pendientes.
 - `tests/unit/`, `tests/integracion/`: con datos sintéticos inventados (`tests/fixtures/`).
 - `tests/referencia/`: con datos reales y casos de desarrollo locales (marcador `referencia`).
   Los resultados esperados se leen siempre desde `EVAL_DEV_PATH`; nunca se copian al repositorio.
+  - `eventos_dev.json` (D51, D66): interpretaciones de referencia de los 84 casos **solo con
+    posiciones**, enumeraciones, SKU y cantidades en dígitos. `formato_eventos_dev.py` lo valida
+    con lista blanca (D61-a, contención en `texto`, límite combinado de 20) y reconstruye los
+    textos desde `EVAL_DEV_PATH`. Nunca agregar campos de texto a este archivo.
 - `datos/`: archivos `.parquet` colocados localmente (ignorados por Git).
 
 ## Convenciones del dominio
@@ -93,7 +113,7 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
 - Construir decimales con `a_decimal(valor, VALIDACION)`, que usa `Decimal(str(valor))`.
   Validaciones: `PRECIO` y `CANTIDAD` > 0; `SALDO` y `LIMITE` ≥ 0; `PORCENTAJE` entero entre 0 y 100.
 - Las funciones de cálculo rechazan argumentos que no sean `Decimal` (`exigir_decimal`).
-- `tests/integracion/test_arquitectura.py` prohíbe en `app/datos` y `app/dominio` imports de
+- `tests/integracion/test_arquitectura.py` prohíbe en `app/datos`, `app/dominio` y `app/mensajes` imports de
   LLM, red, MLflow o FastAPI, el uso de `float()`, `repr()` y literales float, y el reloj del
   sistema (`datetime.now`, `date.today`, `time.time`, …). Los umbrales de similitud son
   porcentajes enteros.
@@ -103,3 +123,5 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
 - E1b-2a agrega `tests/fixtures/historial_e1b2.py` (historial sintético y utilidades para armar
   eventos). No modifica los fixtures de E1a ni de E1b-1, ni sus módulos (incluido
   `esquema_eventos.py`).
+- E1b-2b agrega `tests/fixtures/pedido_e1b2b.py` (utilidades para el orquestador) y no modifica
+  la implementación de E1a, E1b-1 ni E1b-2a.
