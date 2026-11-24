@@ -346,9 +346,10 @@ class TestC3RenglonDeLista:
         assert {"C2", "C3"} <= self.contexto(rec, ["recargas: 3\nvelas: 2"])
         assert procesar(rec, ["recargas: 3\nvelas: 2"]).clasificacion.value == "PEDIDO"
 
-    @pytest.mark.xfail(strict=True, reason="Agrupación: el salto de línea no separa menciones (corrección pendiente de autorización)")
     def test_dos_renglones_sin_vineta_son_pendientes_distintos(self, rec):
+        # Corrección autorizada: el salto de línea separa menciones independientes.
         assert [t for _, t, _ in pendientes(procesar(rec, ["recargas: 3\nvelas: 2"]))] == ["recargas: 3", "velas: 2"]
+
 
     def test_renglones_en_mensajes_distintos_no_forman_lista(self, rec):
         assert self.contexto(rec, ["entrega: 10", "saldo: 3"]) == set()
@@ -411,3 +412,35 @@ class TestAgrupacion:
         assert [t for _, t, _ in pendientes(r)] == textos
         for omision, texto in zip(r.diagnostico.omisiones, textos):
             assert mensaje[omision.posicion[1] : omision.posicion[2]] == texto
+
+
+class TestSaltoDeLinea:
+    """El salto de línea separa menciones independientes, salvo que la descripción continúe en el
+    renglón siguiente (un conector entre ambas, o una señal que abarque los dos renglones)."""
+
+    @pytest.mark.parametrize(
+        ("mensaje", "textos"),
+        [
+            ("recargas: 3\nvelas: 2", ["recargas: 3", "velas: 2"]),
+            ("mándeme gaseosa sol 600\nfrijol negro", ["gaseosa sol 600", "frijol negro"]),
+            ("mándeme 2 cajas de aceite\n3 fardos de frijol negro", ["2 cajas de aceite", "3 fardos de frijol negro"]),
+        ],
+    )
+    def test_separa_menciones_independientes(self, rec, mensaje, textos):
+        assert [t for _, t, _ in pendientes(procesar(rec, [mensaje], cliente="K03"))] == textos
+
+    @pytest.mark.parametrize(
+        ("mensaje", "texto"),
+        [
+            ("mándeme 2 cajas de\naceite", "2 cajas de\naceite"),  # conector al final del renglón
+            ("mándeme 3 fardos\nde gaseosa sol 600", "3 fardos\nde gaseosa sol 600"),  # conector al inicio
+            ("mándeme gaseosa\nsol 600", "gaseosa\nsol 600"),  # el alias abarca los dos renglones
+            ("mándeme gaseosa sol\n600 ml", "gaseosa sol\n600 ml"),  # presentación en el renglón siguiente
+        ],
+    )
+    def test_conserva_una_descripcion_continuada(self, rec, mensaje, texto):
+        assert [t for _, t, _ in pendientes(procesar(rec, [mensaje], cliente="K03"))] == [texto]
+
+    def test_coma_y_conjuncion_sin_cambios(self, rec):
+        r = procesar(rec, ["mándeme gaseosa sol 600, frijol negro y 2 cajas de aceite"], cliente="K03")
+        assert [t for _, t, _ in pendientes(r)] == ["gaseosa sol 600", "frijol negro", "2 cajas de aceite"]

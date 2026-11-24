@@ -350,10 +350,10 @@ class DetectorOmisiones:
             grupos.append((senal.span, {senal.tipo}))
         return [(self._con_presentacion(mensajes[span.mensaje], span), tuple(sorted(tipos))) for span, tipos in grupos]
 
-    @staticmethod
-    def _con_presentacion(mensaje: str, span: Span) -> Span:
+    def _con_presentacion(self, mensaje: str, span: Span) -> Span:
         """Extiende la mención sobre la presentación que la sigue ("gaseosa sol" + " 600 ml"):
-        números y palabras de medida contiguos, con un "de" opcional antes de un número."""
+        números y palabras de medida contiguos, con un "de" opcional antes de un número. No
+        cruza un salto de línea hacia una cantidad nueva ("…aceite\n3 fardos de …")."""
         fin = span.fin
         siguientes = _tokens_con_posicion(mensaje[span.fin :])
         k = 0
@@ -366,6 +366,10 @@ class DetectorOmisiones:
                 break
             if mensaje[fin : span.fin + t.inicio].strip():
                 break  # signos de puntuación entre medio: termina la mención
+            if numero and "\n" in mensaje[fin : span.fin + t.inicio]:
+                despues = siguientes[k + 1] if k + 1 < len(siguientes) else None
+                if despues is not None and self._es_unidad(despues.texto):
+                    break  # el renglón siguiente empieza con una cantidad (S2): otra mención
             fin = span.fin + t.fin
             k += 1
         return Span(span.mensaje, span.inicio, fin)
@@ -377,7 +381,14 @@ class DetectorOmisiones:
         intermedio = mensaje[anterior.fin : siguiente.inicio]
         palabras = [t.texto for t in _tokens_con_posicion(intermedio)]
         resto = _PALABRA.sub(" ", plegar(intermedio)[0]).strip()
-        return not resto and all(p in _CONECTORES for p in palabras)
+        if resto or not all(p in _CONECTORES for p in palabras):
+            return False
+        if "\n" in intermedio:
+            # Un salto de línea separa menciones independientes ("recargas: 3\nvelas: 2"), salvo
+            # que un conector indique que la descripción continúa ("2 cajas de\naceite"). Las
+            # señales que abarcan los dos renglones (un alias) ya se unieron por solapamiento.
+            return bool(palabras)
+        return True
 
     def _opciones(self, texto: str) -> tuple[str, ...]:
         r = self.indice.resolver(texto)

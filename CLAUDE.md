@@ -145,3 +145,6 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
     marcador de compra de la oración es el patrón de lista de E1b-1. "entrega: 10" aislado no
     da contexto. C4 y los demás marcadores siguen funcionando por su cuenta.
   - Fin de renglón S4: un punto solo es parte de un número cuando está entre dos dígitos.
+  - Agrupación: un salto de línea separa menciones independientes, salvo que un conector o
+    una señal que abarque los dos renglones indique que la descripción continúa; la
+    presentación no cruza un salto de línea hacia una cantidad nueva (S2).
