@@ -68,6 +68,21 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
   - `unidades.py`: cantidades (`Decimal` desde texto), compatibilidad por presentación y UPE,
     `convertir()`; cantidades inciertas y sueltas sin número nunca se convierten (D46).
   - `consultas.py`: oraciones con posición y consulta pura = interrogativa sin marcador de compra (D36).
+  - E1b-2a:
+    - `limites.py`: `validar_interpretacion(datos, n_mensajes)` es el **punto de entrada único**
+      para validar una interpretación: aplica el esquema de E1b-1 y el límite combinado
+      `consultas + instrucciones_rechazadas <= 20` (D72). El orquestador (E1b-2b) y el
+      intérprete LLM (E3) deben usarlo; nunca omitir `validar_limites`.
+    - `habitual.py`: último pedido entregado con fecha <= recepción (D53); desempate por
+      `pedido_id` en orden natural y luego por el original (D70); duplicados ->
+      `HistorialInconsistente`, sin identificadores en el mensaje (D73).
+    - `atributos.py`: grupo, marcas, variantes y medidas (D48); compatibilidad = al menos una
+      coincidencia positiva y ninguna contradicción (D76).
+    - `plegado.py`: ítems con identidad y bitácora (nunca se borran), referencias por cadena de
+      sucesores, D37/D75, D10/D13/D76, D47, D48-a/b/c (atómico), D57, D58, D62, D63, D69.
+    - `sustitucion.py`: sustituciones después del plegado, fusionadas en la primera posición.
+    - `diagnostico.py`: solo códigos, posiciones, SKU, cantidades y medidas normalizadas; nunca
+      textos, `cliente_id` ni `pedido_id` (el habitual se registra como `habitual_usado`, D74).
 - `tests/unit/`, `tests/integracion/`: con datos sintéticos inventados (`tests/fixtures/`).
 - `tests/referencia/`: con datos reales y casos de desarrollo locales (marcador `referencia`).
   Los resultados esperados se leen siempre desde `EVAL_DEV_PATH`; nunca se copian al repositorio.
@@ -85,3 +100,6 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
 - El código de E1a (`app/datos/*`, `cierre.py`, `reglas.py`, `estado.py`, `dinero.py`,
   `resultado.py`, `errores.py`) y sus fixtures no se modifican desde E1b.
 - Los fixtures de E1b están en `tests/fixtures/catalogo_e1b.py` (catálogo inventado).
+- E1b-2a agrega `tests/fixtures/historial_e1b2.py` (historial sintético y utilidades para armar
+  eventos). No modifica los fixtures de E1a ni de E1b-1, ni sus módulos (incluido
+  `esquema_eventos.py`).
