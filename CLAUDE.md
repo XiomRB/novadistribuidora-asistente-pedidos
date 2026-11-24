@@ -125,3 +125,18 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
   `esquema_eventos.py`).
 - E1b-2b agrega `tests/fixtures/pedido_e1b2b.py` (utilidades para el orquestador) y no modifica
   la implementación de E1a, E1b-1 ni E1b-2a.
+
+## Requisitos y riesgos para etapas posteriores
+
+- **E2:** `ClienteNoEncontrado` (E1a) incluye el `cliente_id` en su mensaje. La API debe
+  traducirlo a HTTP 404 **sin exponer** el `cliente_id` (ni en la respuesta ni en logs). No
+  modificar E1a para esto.
+- **E2:** `HistorialInconsistente` debe responderse como error interno genérico, sin identificadores.
+- **R-E3-08:** el detector de omisiones no marca la jerga sin el sustantivo del grupo ("cocas",
+  "juguitos"), los productos fuera del catálogo ("recargas", "gas propano") ni los errores en
+  marcas ("bellla", "qutezal"): 7 de 166 menciones quitadas en los casos de desarrollo. Medirlo
+  en E3 (tasa de omisiones no detectadas con el LLM real).
+- **Pendiente de decisión (revisión del PR #5):** pruebas `xfail(strict=True)` en
+  `tests/unit/test_omisiones.py` y `tests/referencia/test_pedido_qn1.py` documentan dos falsos
+  positivos del detector (S1 aproximada con un número que no es presentación; C2 activado por
+  una línea "x: n" sin producto). No quitar las marcas sin la decisión correspondiente.

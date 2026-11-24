@@ -208,3 +208,102 @@ class TestPendientesDeOmision:
     def test_diagnostico_de_omisiones_sin_texto(self, rec):
         r = procesar(rec, ["mándeme 3 fardos de gaseosa ZQXMARCA"])
         assert "ZQXMARCA" not in repr(r.diagnostico) and r.diagnostico.omisiones[0].senal == "S1+S2"
+
+
+# ====================================================================== revisión del PR #5
+#
+# Las pruebas marcadas `xfail(strict=True)` documentan dos defectos encontrados en la revisión
+# (falsos positivos). Su corrección está propuesta y pendiente de autorización: hoy fallan a
+# propósito y, si la corrección se aplica, pasarán y habrá que quitar la marca.
+
+DEFECTO_S1 = "S1 aproximada: un número que no es presentación cuenta como evidencia (corrección pendiente de autorización)"
+DEFECTO_C2 = "C2: una línea 'x: n' sin producto activa el contexto por el reconocedor de listas de E1b-1 (decisión pendiente)"
+
+
+class TestS1Aproximada:
+    """Coincidencia aproximada (>= 80 %) del sustantivo del grupo, solo con evidencia adyacente.
+
+    Correcto: un error leve del grupo seguido de una marca, una variante o una presentación del
+    mismo grupo es señal; sin evidencia, o con evidencia de otro grupo, no lo es; un número que
+    no es una presentación del grupo (una hora, una cantidad de veces) no es evidencia."""
+
+    @pytest.mark.parametrize(("mensaje", "senal"), [("friijol negro", "friijol"), ("gaseosaa 600", "gaseosaa"), ("lechee nieve", "lechee")])
+    def test_error_leve_con_evidencia_adyacente(self, rec, mensaje, senal):
+        assert senales(rec, mensaje) == [("S1", senal)]
+
+    @pytest.mark.parametrize("mensaje", ["friijol", "gaseosaa", "frijool por favor", "friijol y nada más"])
+    def test_sin_evidencia_adyacente_no_es_senal(self, rec, mensaje):
+        assert senales(rec, mensaje) == []
+
+    @pytest.mark.parametrize("mensaje", ["frijool sol", "papeel sol", "lechee luna", "gaseosaa campo"])
+    def test_evidencia_de_otro_grupo_no_cuenta(self, rec, mensaje):
+        # "sol" es marca de la gaseosa, "luna" de las galletas y "campo" del frijol.
+        assert senales(rec, mensaje) == []
+
+    def test_no_confunde_grupos_en_la_misma_frase(self, rec):
+        assert senales(rec, "friijol negro y gaseosaa sol") == [("S1", "friijol"), ("S1", "gaseosaa")]
+
+    @pytest.mark.xfail(strict=True, reason=DEFECTO_S1)
+    @pytest.mark.parametrize("mensaje", ["Claro, 2 de frijol negro", "claro 2 veces", "lechee 3 dias", "aceitee 5 de la tarde"])
+    def test_numero_que_no_es_presentacion_no_es_evidencia(self, rec, mensaje):
+        assert [t for _, t in senales(rec, mensaje) if t.casefold() in {"claro", "lechee", "aceitee"}] == []
+
+    @pytest.mark.xfail(strict=True, reason=DEFECTO_S1)
+    def test_claro_al_inicio_no_genera_pendiente(self, rec):
+        # Hoy: "Claro" (seguido de "2") se toma como el cloro y el pedido queda en revisión.
+        r = procesar(rec, ["Claro, 2 de frijol negro"], [ev(1, 0, "agregar", "2 de frijol negro", producto="frijol negro", cantidad="2")])
+        assert r.cierre.pendientes == () and r.cierre.estado.value == "confirmado"
+
+
+class TestS4FrenteAC2:
+    """S4 es estricta (la línea completa es «producto: número» o empieza con viñeta); C2 usa el
+    reconocedor de E1b-1, que cuenta como marcador de compra cualquier oración que empiece con
+    «x: n» (sección 3.4: los renglones de lista son marcadores de compra)."""
+
+    def contexto(self, rec, mensaje):
+        ctx = rec.detector.contexto(rec.detector.senales([mensaje]), oraciones([mensaje]), False)
+        return activas(ctx)
+
+    @pytest.mark.parametrize(("mensaje", "texto"), [("frijol rojo: 3", "frijol rojo: 3"), ("- gaseosa sol 600", "gaseosa sol 600")])
+    def test_renglones_de_producto_son_s4_y_c2(self, rec, mensaje, texto):
+        assert ("S4", texto) in senales(rec, mensaje) and self.contexto(rec, mensaje) == {"C2", "C3"}
+        assert [t for _, t, _ in pendientes(procesar(rec, [mensaje]))] == [texto]
+
+    @pytest.mark.parametrize("mensaje", ["saldo pendiente: 10 cajas", "entrega: 10 cajas"])
+    def test_linea_que_no_es_s4_activa_c2_y_c4(self, rec, mensaje):
+        # No es S4, pero activa C2 (reconocedor de listas) y C4 (S2 "10 cajas"). Según D61, basta C4:
+        # el "10 cajas" sin producto queda como pendiente producto_ambiguo sin opciones.
+        assert all(t != "S4" for t, _ in senales(rec, mensaje))
+        assert self.contexto(rec, mensaje) == {"C2", "C4"}
+        assert pendientes(procesar(rec, [mensaje])) == [("producto_ambiguo", "10 cajas", ())]
+
+    def test_hoy_una_linea_x_n_sin_producto_da_contexto_a_un_reclamo(self, rec):
+        # Evidencia del comportamiento actual: solo C2 (por "saldo: 3") convierte el reclamo en pedido.
+        mensaje = "saldo: 3. la gaseosa llegó caliente"
+        assert self.contexto(rec, mensaje) == {"C2"}
+        assert procesar(rec, [mensaje]).clasificacion.value == "PEDIDO"
+
+    @pytest.mark.xfail(strict=True, reason=DEFECTO_C2)
+    def test_reclamo_con_linea_x_n_sin_producto_es_consulta(self, rec):
+        r = procesar(rec, ["saldo: 3. la gaseosa llegó caliente"])
+        assert r.clasificacion.value == "CONSULTA" and r.cierre.pendientes == ()
+
+
+class TestAgrupacion:
+    @pytest.mark.parametrize(
+        ("mensaje", "textos"),
+        [
+            ("mándeme gaseosa sol 600, frijol negro", ["gaseosa sol 600", "frijol negro"]),  # la coma separa
+            ("mándeme gaseosa sol 600 y frijol negro", ["gaseosa sol 600", "frijol negro"]),  # "y" separa
+            ("mándeme 3 fardos de gaseosa sol 600", ["3 fardos de gaseosa sol 600"]),  # "de" agrupa
+            ("mándeme una docena de cloro claro", ["una docena de cloro claro"]),
+            ("mándeme 2 cajas de aceite lo de siempre", ["2 cajas de aceite", "lo de siempre"]),  # S3 aparte
+            ("mándeme lo de siempre de gaseosa sol", ["lo de siempre", "gaseosa sol"]),
+            ("mándeme una docena de cloro claro, 2 cajas de aceite y lo de siempre", ["una docena de cloro claro", "2 cajas de aceite", "lo de siempre"]),
+        ],
+    )
+    def test_tramos_exactos(self, rec, mensaje, textos):
+        r = procesar(rec, [mensaje], cliente="K03")  # K03 no tiene historial entregado
+        assert [t for _, t, _ in pendientes(r)] == textos
+        for omision, texto in zip(r.diagnostico.omisiones, textos):
+            assert mensaje[omision.posicion[1] : omision.posicion[2]] == texto

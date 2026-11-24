@@ -53,3 +53,23 @@ def test_pedidos_interrogativos_por_el_orquestador(recursos, caso):
 @pytest.mark.parametrize("mensaje", ["doña Rosa le manda saludos", "te mando el dinero mañana", "Claro que sí, gracias", "la Finca está lejos"])
 def test_d60_nombres_y_palabras_comunes_no_son_senal(recursos, mensaje):
     assert recursos.detector.senales([mensaje]) == []
+
+
+# S1 aproximada con el catálogo real (revisión del PR #5).
+@pytest.mark.parametrize(
+    ("mensaje", "senal"),
+    [("nranjita 600 ml", "nranjita"), ("narannjita 1.5", "narannjita"), ("friijol negro", "friijol"), ("paapel suave 4", "paapel")],
+)
+def test_s1_errores_leves_con_evidencia_en_el_catalogo_real(recursos, mensaje, senal):
+    assert [mensaje[s.span.inicio : s.span.fin] for s in recursos.detector.senales([mensaje]) if s.tipo.value == "S1"] == [senal]
+
+
+@pytest.mark.parametrize("mensaje", ["nranjita", "friijol", "frijool sol"])
+def test_s1_sin_evidencia_o_de_otro_grupo_en_el_catalogo_real(recursos, mensaje):
+    assert recursos.detector.senales([mensaje]) == []
+
+
+@pytest.mark.xfail(strict=True, reason="S1 aproximada: un número que no es presentación cuenta como evidencia (corrección pendiente)")
+@pytest.mark.parametrize("mensaje", ["claro 2 veces", "harían 3 viajes", "papito 3 años", "lecho 2"])
+def test_s1_numero_que_no_es_presentacion_en_el_catalogo_real(recursos, mensaje):
+    assert recursos.detector.senales([mensaje]) == []
