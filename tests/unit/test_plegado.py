@@ -5,6 +5,7 @@ from decimal import Decimal
 import pytest
 
 from app.dominio.plegado import Clase, EstadoItem
+from app.dominio.resultado import Motivo
 from tests.fixtures.historial_e1b2 import cargar_contexto, ev, lineas, pendientes, plegar_mensajes
 
 D = Decimal
@@ -521,12 +522,41 @@ class TestSinCoincidenciasNiContradicciones:
         assert vocab.cumple(a, "GS6") is True
 
     def test_d76_sin_ref_no_elige_el_item_como_destino(self, ctx):
-        rp, sal, _ = correr(ctx, ["2 fardos de gaseosa sol 600", "mejor la de 24, que sean 5"], [
+        mensajes = ["2 fardos de gaseosa sol 600", "mejor la de 24, que sean 5"]
+        rp, sal, _ = correr(ctx, mensajes, [
             SOL600, ev(2, 1, "corregir", "mejor la de 24, que sean 5", producto="la de 24", cantidad="5"),
         ])
+        # La línea original queda intacta.
         assert lineas(sal) == [("GS6", "2")]  # ni la cantidad ni el producto cambian
+        todos = items(rp)
+        assert todos["i1"].estado is EstadoItem.ACTIVO and todos["i1"].origen == ["e1"]
         assert [a.accion for a in rp.acciones if a.item == "i1"] == ["CREAR"]
-        assert codigos(rp)["e2"] not in ("CORREGIR_CANTIDAD", "PRECISION_COMPATIBLE", "REEMPLAZO")
+
+        # D10/D76: sin destino compatible, el evento se trata como agregar. «la de 24» no identifica
+        # ningún producto, así que la agregación produce un pendiente producto_no_existe propio.
+        assert [(a.evento, a.accion, a.item) for a in rp.acciones] == [("e1", "CREAR", "i1"), ("e2", "CREAR", "i2")]
+        nuevo = todos["i2"]
+        assert (nuevo.clase, nuevo.estado, nuevo.motivo, nuevo.sku, nuevo.opciones) == (
+            Clase.PENDIENTE, EstadoItem.ACTIVO, Motivo.PRODUCTO_NO_EXISTE, None, ()
+        )
+        assert nuevo.origen == ["e2"] and [(x.evento, x.cantidad) for x in nuevo.entradas] == [("e2", D(5))]
+        assert pendientes(rp) == [("producto_no_existe", ())] and [p.id for p in rp.pendientes_activos()] == ["i2"]
+
+        # No se descarta ni se ignora en silencio: queda registrado con su resultado y llega a la salida.
+        d = rp.diagnostico(sal)
+        (registro,) = [x for x in d.eventos if x.evento == "e2"]
+        assert (registro.tipo, registro.codigo, registro.item) == ("corregir", "NO_EXISTE", "i2")
+        assert d.eventos_descartados == () and d.salida_pendientes == ("i2",) and d.salida_lineas == ("i1",)
+
+        # Mismo resultado que el agregar explícito equivalente.
+        rp_a, sal_a, _ = correr(ctx, mensajes, [
+            SOL600, ev(2, 1, "agregar", "mejor la de 24, que sean 5", producto="la de 24", cantidad="5"),
+        ])
+        def resumen(r):
+            return [(i.id, i.clase, i.estado, i.motivo, i.sku, i.opciones, i.texto, tuple(i.origen),
+                     tuple((x.evento, x.cantidad) for x in i.entradas)) for i in r.items]
+        assert resumen(rp) == resumen(rp_a) and lineas(sal) == lineas(sal_a)
+        assert {e.evento: e.codigo for e in rp_a.eventos}["e2"] == "NO_EXISTE"
 
     def test_d48_con_ref_conserva_el_sku_y_solo_corrige_la_cantidad(self, ctx):
         rp, sal, _ = correr(ctx, ["2 fardos de gaseosa sol 600", "de esa la de 24, que sean 5"], [
