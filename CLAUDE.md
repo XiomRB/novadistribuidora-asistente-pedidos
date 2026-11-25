@@ -83,9 +83,29 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
     - `sustitucion.py`: sustituciones después del plegado, fusionadas en la primera posición.
     - `diagnostico.py`: solo códigos, posiciones, SKU, cantidades y medidas normalizadas; nunca
       textos, `cliente_id` ni `pedido_id` (el habitual se registra como `habitual_usado`, D74).
+  - E1b-2b:
+    - `omisiones.py`: señales S1 (grupo, alias o nombre completo; nunca marca o variante
+      suelta, D60), S2 (número + unidad), S3 (habitual) y S4 (renglón de lista). Cobertura por
+      posición (`|S∩E| >= ceil(|S|/2)` con un evento efectivo, o S dentro de una consulta pura
+      del código); las rechazadas y los descartados nunca cubren. Contexto D61 (C1–C5). Pendiente
+      `producto_ambiguo` con el tramo exacto de la señal (D59); nunca crea líneas (D05).
+    - `clasificacion.py`: `CONSULTA`, `PEDIDO_CANCELADO`, `SIN_EFECTO`, `PEDIDO`, de la que sale
+      `hay_eventos_pedido` para el cierre de E1a.
+    - `pedido.py`: `procesar_pedido(entrada, interpretacion, datos, indice=None, lexico=None,
+      recursos=None)`. Orden obligatorio: cliente (`ClienteNoEncontrado`), luego
+      `validar_interpretacion` (D72) **antes** del anclaje, anclaje y descartes (`SIN_ANCLA`,
+      `DESCARTADO_CONSULTA`), plegado, sustituciones, omisiones, clasificación, cierre de E1a,
+      mensaje y diagnóstico. Pendientes en el orden D64. `Recursos` precomputa índice, léxico,
+      vocabulario, detector y redactor (D68).
+- `app/mensajes/confirmacion.py`: mensaje al cliente con plantillas (D16 sin montos, D49, D65,
+  saludo y fecha según 3.6). Nunca usa texto del cliente ni el texto de los pendientes.
 - `tests/unit/`, `tests/integracion/`: con datos sintéticos inventados (`tests/fixtures/`).
 - `tests/referencia/`: con datos reales y casos de desarrollo locales (marcador `referencia`).
   Los resultados esperados se leen siempre desde `EVAL_DEV_PATH`; nunca se copian al repositorio.
+  - `eventos_dev.json` (D51, D66): interpretaciones de referencia de los 84 casos **solo con
+    posiciones**, enumeraciones, SKU y cantidades en dígitos. `formato_eventos_dev.py` lo valida
+    con lista blanca (D61-a, contención en `texto`, límite combinado de 20) y reconstruye los
+    textos desde `EVAL_DEV_PATH`. Nunca agregar campos de texto a este archivo.
 - `datos/`: archivos `.parquet` colocados localmente (ignorados por Git).
 
 ## Convenciones del dominio
@@ -93,7 +113,7 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
 - Construir decimales con `a_decimal(valor, VALIDACION)`, que usa `Decimal(str(valor))`.
   Validaciones: `PRECIO` y `CANTIDAD` > 0; `SALDO` y `LIMITE` ≥ 0; `PORCENTAJE` entero entre 0 y 100.
 - Las funciones de cálculo rechazan argumentos que no sean `Decimal` (`exigir_decimal`).
-- `tests/integracion/test_arquitectura.py` prohíbe en `app/datos` y `app/dominio` imports de
+- `tests/integracion/test_arquitectura.py` prohíbe en `app/datos`, `app/dominio` y `app/mensajes` imports de
   LLM, red, MLflow o FastAPI, el uso de `float()`, `repr()` y literales float, y el reloj del
   sistema (`datetime.now`, `date.today`, `time.time`, …). Los umbrales de similitud son
   porcentajes enteros.
@@ -103,3 +123,35 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
 - E1b-2a agrega `tests/fixtures/historial_e1b2.py` (historial sintético y utilidades para armar
   eventos). No modifica los fixtures de E1a ni de E1b-1, ni sus módulos (incluido
   `esquema_eventos.py`).
+- E1b-2b agrega `tests/fixtures/pedido_e1b2b.py` (utilidades para el orquestador) y no modifica
+  la implementación de E1a, E1b-1 ni E1b-2a.
+
+## Requisitos y riesgos para etapas posteriores
+
+- **E2:** `ClienteNoEncontrado` (E1a) incluye el `cliente_id` en su mensaje. La API debe
+  traducirlo a HTTP 404 **sin exponer** el `cliente_id` (ni en la respuesta ni en logs). No
+  modificar E1a para esto.
+- **E2:** `HistorialInconsistente` debe responderse como error interno genérico, sin identificadores.
+- **R-E3-08:** el detector de omisiones no marca la jerga sin el sustantivo del grupo ("cocas",
+  "juguitos"), los productos fuera del catálogo ("recargas", "gas propano") ni los errores en
+  marcas ("bellla", "qutezal"): 7 de 166 menciones quitadas en los casos de desarrollo. Medirlo
+  en E3 (tasa de omisiones no detectadas con el LLM real).
+- **Reglas autorizadas en la revisión del PR #5** (`omisiones.py`, sin tocar `consultas.py`):
+  - S1 aproximada (>= 80 %, grupos de 5 letras o más): un número solo es evidencia si es una
+    presentación compatible con el grupo; un signo de puntuación entre la palabra y la evidencia
+    la anula. No ampliar la tolerancia ni reducir los requisitos de evidencia.
+  - Renglón S4 válido (opción B, `renglones_validos`): contiene una señal S1, o en su mismo
+    mensaje hay al menos dos renglones S4 **sin** S1 (los que tienen S1 no cuentan para ese
+    umbral; las viñetas no son excepción; los mensajes no se cuentan juntos). El mismo criterio
+    vale para las señales S4 (pendientes de omisión), C2 y C3 (precisión de D61). C2 lo aplica
+    cuando el único marcador de compra de la oración es el patrón de lista de E1b-1. C4 y los
+    demás marcadores siguen funcionando por su cuenta.
+  - **Limitación aceptada (listas mixtas):** en "- frijol rojo: 3\n- recargas: 3", el renglón
+    de un producto fuera del catálogo no alcanza el umbral y no se detecta como omisión.
+  - **Consecuencia deliberada:** con al menos dos renglones S4 sin S1 en un mensaje, todos son
+    válidos, incluidos los administrativos ("recargas: 3\nvelas: 2\nentrega: 10" genera tres
+    pendientes). No agregar listas de palabras administrativas ni excepciones por viñetas.
+  - Fin de renglón S4: un punto solo es parte de un número cuando está entre dos dígitos.
+  - Agrupación: un salto de línea separa menciones independientes, salvo que un conector o
+    una señal que abarque los dos renglones indique que la descripción continúa; la
+    presentación no cruza un salto de línea hacia una cantidad nueva (S2).
