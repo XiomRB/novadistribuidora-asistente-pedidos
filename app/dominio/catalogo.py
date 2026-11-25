@@ -17,6 +17,22 @@ Algoritmo de `resolver`:
 5. Sin evidencia textual (solo candidatos del LLM): ambiguo con el universo (D45).
 6. Sin sobrevivientes: no existe. Un único máximo: resuelto. Empate: ambiguo.
 7. Resuelto y agotado sin sustituto disponible: pendiente de agotado (D38).
+
+D92 (R-E3-09), antes de lo anterior. Cada token significativo de la mención (sin palabras de
+unidad) se clasifica con la misma tolerancia a errores leves (peso >= 7) como:
+- ancla: sustantivo de un grupo, token de marca o primer token de un nombre o alias;
+- conocido: cualquier otro token del catálogo (p. ej. "polvo", del nombre Leche en Polvo);
+- desconocido: no se parece a ningún token del catálogo ("levadura", "lala").
+Los candidatos del LLM nunca son evidencia textual. Reglas, en este orden de precedencia:
+- R1-a: sin ancla y con algún token conocido -> NO_EXISTE, con o sin candidatos del LLM. Prevalece
+  sobre R1-b: un token conocido sin ancla indica otro producto ("levadura en polvo").
+- R1-b (D45, sin cambios): sin ancla, sin tokens conocidos (jerga pura: "cocas", "chescos") ->
+  resolución original: ambiguo con los hermanos de los candidatos o NO_EXISTE sin candidatos (R1-c).
+- R2: ancla y algún token desconocido (marca o variante que no vendemos) -> AMBIGUO sin opciones.
+  Única excepción: se conserva el NO_EXISTE de la resolución original cuando se debe a medidas
+  explícitas contradictorias (código MEDIDA_SIN_PRODUCTO). Cualquier otro NO_EXISTE (p. ej.
+  SIN_COINCIDENCIAS) queda como AMBIGUO sin opciones.
+- En todos los casos, una mención sin ancla nunca produce una línea (resuelto o agotado).
 """
 
 from __future__ import annotations
@@ -26,9 +42,25 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from app.datos.modelos import Datos, Producto
-from app.dominio.texto import Medida, extraer_medidas, peso_coincidencia, singular, tokens
+from app.datos.normalizacion import normalizar_texto
+from app.dominio.texto import Medida, extraer_medidas, peso_coincidencia, singular, tokens, variantes
+from app.dominio.unidades import DOCENAS, SUELTAS
 
 BONO_ALIAS = 5
+PESO_EVIDENCIA = 7  # D92: la misma tolerancia a errores leves que el resto de la resolución
+# Palabras de unidad que nunca cuentan como evidencia de producto. Esta constante contiene solo
+# las fijas del léxico de unidades de E1b-1 (`SUELTAS` y `DOCENAS`); `IndiceCatalogo.__init__`
+# les agrega `palabras_cantidad` (si se recibe) y las unidades de venta del catálogo cargado.
+_UNIDADES_BASE = frozenset(SUELTAS) | DOCENAS
+
+
+class Evidencia(StrEnum):
+    """Clase de evidencia textual de una mención (D92)."""
+
+    NORMAL = "normal"
+    SIN_ANCLA_CON_CONOCIDO = "sin_ancla_con_conocido"  # R1-a
+    JERGA = "jerga"  # R1-b / R1-c
+    TOKEN_DESCONOCIDO = "token_desconocido"  # R2
 
 
 class TipoResolucion(StrEnum):
@@ -95,6 +127,24 @@ class IndiceCatalogo:
         for entrada in self.entradas.values():
             self.por_grupo.setdefault(entrada.grupo, ())
             self.por_grupo[entrada.grupo] += (entrada.sku,)
+        # D92: anclas, vocabulario y palabras de unidad, derivados de los datos.
+        anclas: set[str] = set(self.por_grupo)
+        vocabulario: set[str] = set()
+        for sku, entrada in self.entradas.items():
+            producto = datos.productos[sku]
+            vocabulario |= set(entrada.tokens)
+            anclas |= set(tokens(producto.marca))
+            nombre = tokens(producto.nombre)
+            if nombre:
+                anclas.add(nombre[0])
+            for alias_tokens, _ in entrada.alias:
+                if alias_tokens:
+                    anclas.add(alias_tokens[0])
+        self.anclas = frozenset(anclas)
+        self.vocabulario = frozenset(vocabulario | anclas)
+        unidades = set(_UNIDADES_BASE) | set(palabras_cantidad)
+        unidades |= {normalizar_texto(p.unidad_venta) for p in datos.productos.values()}
+        self.unidades = frozenset(unidades)
 
     # ------------------------------------------------------------ consultas del índice
 
@@ -135,9 +185,54 @@ class IndiceCatalogo:
                 break
         return puntaje
 
+    # ------------------------------------------------------------ evidencia (D92)
+
+    def _parece(self, token: str, conjunto: frozenset[str]) -> bool:
+        return any(peso_coincidencia(token, v) >= PESO_EVIDENCIA for v in conjunto)
+
+    def evidencia(self, descripcion: str) -> Evidencia:
+        significativos = [
+            t for t in tokens(descripcion) if not (variantes(t) & self.unidades) and singular(t) not in self.unidades
+        ]
+        if not significativos:
+            return Evidencia.NORMAL
+        if not any(self._parece(t, self.anclas) for t in significativos):
+            if any(self._parece(t, self.vocabulario) for t in significativos):
+                return Evidencia.SIN_ANCLA_CON_CONOCIDO
+            return Evidencia.JERGA
+        if any(not self._parece(t, self.vocabulario) for t in significativos):
+            return Evidencia.TOKEN_DESCONOCIDO
+        return Evidencia.NORMAL
+
     # ------------------------------------------------------------ resolución
 
     def resolver(self, descripcion: str, candidatos_llm: Sequence[str] = ()) -> Resolucion:
+        evidencia = self.evidencia(descripcion)
+        if evidencia is Evidencia.SIN_ANCLA_CON_CONOCIDO:
+            # R1-a (prioridad sobre R1-b): la coincidencia parcial indica otro producto; los
+            # candidatos del LLM no son evidencia. Sin línea y sin opciones. Los códigos solo
+            # indican qué ocurrió con los candidatos; nunca llevan texto ni identificadores.
+            codigos: list[str] = []
+            if any(s not in self.entradas for s in candidatos_llm):
+                codigos.append("SKU_LLM_INEXISTENTE")
+            if any(s in self.entradas for s in candidatos_llm):
+                codigos.append("CANDIDATOS_LLM_IGNORADOS")
+            return Resolucion(TipoResolucion.NO_EXISTE, codigos=tuple(codigos + ["SIN_ANCLA_CATALOGO"]))
+        r = self._resolver_por_texto(descripcion, candidatos_llm)
+        if evidencia is Evidencia.JERGA:
+            # R1-b / R1-c: D45 sin cambios. Una mención sin ancla nunca produce una línea.
+            if r.tipo in (TipoResolucion.RESUELTO, TipoResolucion.AGOTADO_SIN_SUSTITUTO):
+                return Resolucion(TipoResolucion.AMBIGUO, opciones=r.opciones, codigos=r.codigos + ("SIN_ANCLA_CATALOGO",))
+            return r
+        if evidencia is Evidencia.TOKEN_DESCONOCIDO:
+            # R2: una marca o variante que no vendemos; ningún SKU cuenta con evidencia suficiente.
+            if r.tipo is TipoResolucion.NO_EXISTE and "MEDIDA_SIN_PRODUCTO" in r.codigos:
+                return r  # única excepción: medidas explícitas contradictorias
+            return Resolucion(TipoResolucion.AMBIGUO, opciones=(), codigos=r.codigos + ("TOKEN_DESCONOCIDO",))
+        return r
+
+    def _resolver_por_texto(self, descripcion: str, candidatos_llm: Sequence[str] = ()) -> Resolucion:
+        """Resolución de E1b-1, sin cambios: puntajes, universo, medidas y D45."""
         codigos: list[str] = []
         validos = [s for s in candidatos_llm if s in self.entradas]
         if len(validos) != len(candidatos_llm):

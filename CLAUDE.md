@@ -68,6 +68,15 @@ DATA_DIR=datos .venv/bin/python -m app.main
     `localizar` y `anclar`.
   - `catalogo.py`: índice (grupo, hermanos, alias, medidas) y `resolver()`: nunca acepta un SKU
     sin evidencia textual (D45); agotado sin sustituto antes que la unidad (D38).
+    D92 (R-E3-09), antes de la resolución por texto: cada token se clasifica como ancla (grupo,
+    marca o primer token de un nombre o alias), conocido o desconocido. R1-a (prioridad sobre
+    R1-b): sin ancla y con un token conocido -> `producto_no_existe`, con o sin candidatos del LLM
+    ("levadura en polvo"). R1-b: jerga pura -> D45 sin cambios ("cocas"). R1-c: sin ancla ni
+    candidatos -> `producto_no_existe`. R2: ancla y token desconocido (marca o variante que no
+    vendemos) -> ambiguo **sin opciones**, salvo medidas explícitas contradictorias
+    (`MEDIDA_SIN_PRODUCTO`), que conservan `producto_no_existe`. Una mención sin ancla nunca
+    produce una línea. `CANDIDATOS_LLM_IGNORADOS` es interno de `Resolucion.codigos`. No
+    agregar listas de marcas ni excepciones por número de palabras.
   - `unidades.py`: cantidades (`Decimal` desde texto), compatibilidad por presentación y UPE,
     `convertir()`; cantidades inciertas y sueltas sin número nunca se convierten (D46).
   - `consultas.py`: oraciones con posición y consulta pura = interrogativa sin marcador de compra (D36).
