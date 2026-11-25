@@ -1,0 +1,89 @@
+"""Aplicación FastAPI (E2b): factoría, arranque y ejecución.
+
+- `crear_app(configuracion=None, datos=None, interprete=None, sondas=())`: los datos, el intérprete
+  y las sondas son inyectables (pruebas). Por defecto los datos se cargan de `DATA_DIR` al
+  arrancar y el intérprete es `InterpreteNoConfigurado` (D80: 503 hasta E3).
+- Arranque (`lifespan`): `cargar_datos`; si faltan o son inválidos, **la aplicación no arranca**
+  (D24) y el error solo informa códigos y archivos (nunca claves ni datos). Después,
+  `Recursos.construir` una sola vez (D68).
+- Límite del cuerpo de 1 MiB contando los bytes recibidos (D87).
+- `ejecutar()`: Uvicorn en el puerto 8000 del Anexo, **sin access log** (D88).
+- `X-Request-ID` queda para E4 (D84).
+
+Uso: `python -m app.main` (o `uvicorn app.main:app --port 8000 --no-access-log`).
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
+from app.api.limites_http import LimiteCuerpo
+from app.api.rutas import registrar_manejadores, router
+from app.api.salud import Sonda, sonda_interprete
+from app.config import Configuracion
+from app.datos.carga import cargar_datos
+from app.datos.modelos import Datos
+from app.dominio.errores import DatosInvalidos
+from app.dominio.pedido import Recursos
+from app.interprete.base import Interprete, InterpreteNoConfigurado
+from app.servicio import ServicioPedidos
+
+PUERTO = 8000
+HOST = "0.0.0.0"
+
+log = logging.getLogger("novadistribuidora.api")
+
+
+class ErrorArranque(RuntimeError):
+    """Los datos faltan o son inválidos: la API no arranca (D24)."""
+
+
+def cargar_datos_para_arranque(configuracion: Configuracion) -> Datos:
+    try:
+        return cargar_datos(configuracion.dir_datos)
+    except DatosInvalidos as error:
+        # Solo códigos y archivos: las claves de los problemas pueden ser identificadores.
+        problemas = sorted({f"{p.codigo} ({p.archivo})" for p in error.errores})
+        mensaje = f"No se pudieron cargar los datos de {configuracion.dir_datos}: " + ", ".join(problemas)
+        log.error(mensaje)
+        raise ErrorArranque(mensaje) from None
+
+
+def crear_app(
+    configuracion: Configuracion | None = None,
+    datos: Datos | None = None,
+    interprete: Interprete | None = None,
+    sondas: Sequence[Sonda] = (),
+) -> FastAPI:
+    interprete_efectivo: Interprete = interprete if interprete is not None else InterpreteNoConfigurado()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        datos_efectivos = datos if datos is not None else cargar_datos_para_arranque(configuracion or Configuracion.desde_entorno())
+        app.state.servicio = ServicioPedidos(datos_efectivos, Recursos.construir(datos_efectivos), interprete_efectivo)
+        app.state.sondas = [sonda_interprete(interprete_efectivo), *sondas]
+        yield
+
+    app = FastAPI(title="NovaDistribuidora: interpretación de pedidos", version="0.2.0", lifespan=lifespan)
+    app.include_router(router)
+    registrar_manejadores(app)
+    app.add_middleware(LimiteCuerpo)
+    return app
+
+
+app = crear_app()
+
+
+def ejecutar() -> None:
+    import uvicorn
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    uvicorn.run(app, host=HOST, port=PUERTO, access_log=False)
+
+
+if __name__ == "__main__":
+    ejecutar()
