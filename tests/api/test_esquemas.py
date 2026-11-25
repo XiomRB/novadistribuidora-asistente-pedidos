@@ -1,6 +1,7 @@
 """E2a: esquema de la solicitud (D15, D56, D77, D90) y formato de errores 422 (D78), 404, 503 y 500."""
 
 import json
+from datetime import datetime
 
 import pytest
 from fastapi import FastAPI
@@ -118,6 +119,38 @@ def test_fechas_invalidas(fecha):
     assert errores_de(con(fecha_hora=fecha)) == [
         {"campo": "fecha_hora", "motivo": "debe tener el formato AAAA-MM-DDTHH:MM y ser una fecha y hora válidas"}
     ]
+
+
+@pytest.mark.parametrize(
+    "fecha",
+    ["2026-11-23T15:20\n", "2026-11-23T15:20\r\n", "\n2026-11-23T15:20", "2026-11-23T15:20\x00", "2026-11-23T15:20\t",
+     "2026-11-23T15:20x", "x2026-11-23T15:20", "2026-11-23T15:200", "02026-11-23T15:20", "2026-11-23T15:20​"],
+    ids=["salto_final", "crlf_final", "salto_inicial", "nulo_final", "tab_final", "letra_final", "letra_inicial",
+         "digito_final", "digito_inicial", "ancho_cero_final"],
+)
+def test_fecha_con_caracteres_adicionales(fecha, monkeypatch):
+    import app.api.esquemas as esquemas
+
+    assert errores_de(con(fecha_hora=fecha))[0]["campo"] == "fecha_hora"
+
+    # El patrón solo debe rechazarla, sin depender de strptime: se reemplaza por uno que acepta todo.
+    class SiempreValida(datetime):
+        @classmethod
+        def strptime(cls, *_args):
+            return datetime(2026, 11, 23, 15, 20)
+
+    monkeypatch.setattr(esquemas, "datetime", SiempreValida)
+    assert errores_de(con(fecha_hora=fecha))[0]["campo"] == "fecha_hora"
+    assert SolicitudPedido.model_validate(VALIDA).fecha_hora == VALIDA["fecha_hora"]  # control: lo válido pasa
+
+
+@pytest.mark.parametrize("fecha", ["٢٠٢٦-١١-٢٣T١٥:٢٠", "２０２６-１１-２３T１５:２０", "2026-11-23T１５:20", "२०२६-11-23T15:20"],
+                         ids=["arabigo_oriental", "ancho_completo", "hora_ancho_completo", "devanagari"])
+def test_fecha_con_digitos_unicode(fecha):
+    from app.api.esquemas import _PATRON_FECHA_HORA
+
+    assert _PATRON_FECHA_HORA.fullmatch(fecha) is None
+    assert errores_de(con(fecha_hora=fecha))[0]["campo"] == "fecha_hora"
 
 
 @pytest.mark.parametrize(("valor", "motivo"), [(20261123, "debe ser un texto"), (None, "debe ser un texto"), (..., "es obligatorio")])

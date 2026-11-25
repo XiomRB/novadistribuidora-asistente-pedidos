@@ -36,7 +36,9 @@ from app.dominio.resultado import Estado, Motivo
 MAX_CARACTERES_CLIENTE_ID = 64  # D90: caracteres (puntos de código), no bytes
 FORMATO_FECHA_HORA = "%Y-%m-%dT%H:%M"
 # Solo dígitos ASCII: `\d` aceptaría dígitos Unicode como "２０２６" (y `strptime` también).
-_PATRON_FECHA_HORA = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$")
+# Se valida con `fullmatch`: el texto completo debe ser exactamente el formato, sin ningún carácter
+# adicional (`$` con `match` aceptaría un salto de línea final).
+_PATRON_FECHA_HORA = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}")
 
 MOTIVO_CLIENTE_ID = f"debe tener entre 1 y {MAX_CARACTERES_CLIENTE_ID} caracteres"
 MOTIVO_FECHA_HORA = "debe tener el formato AAAA-MM-DDTHH:MM y ser una fecha y hora válidas"
@@ -66,7 +68,7 @@ class SolicitudPedido(BaseModel):
     @field_validator("fecha_hora")
     @classmethod
     def _validar_fecha_hora(cls, valor: str) -> str:
-        if not _PATRON_FECHA_HORA.match(valor):
+        if not _PATRON_FECHA_HORA.fullmatch(valor):
             raise _error("fecha_hora", MOTIVO_FECHA_HORA)
         try:
             datetime.strptime(valor, FORMATO_FECHA_HORA)
