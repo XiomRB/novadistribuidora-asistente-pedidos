@@ -21,15 +21,16 @@ Nada de este módulo usa texto de los mensajes en el diagnóstico: solo códigos
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from enum import StrEnum
 
 from app.datos.modelos import Datos
 from app.datos.normalizacion import normalizar_texto
 from app.dominio.atributos import Atributos, VocabularioAtributos, a_descripcion, combinar
-from app.dominio.catalogo import IndiceCatalogo, Resolucion, TipoResolucion
+from app.dominio.catalogo import DIMENSION_DE_UNIDAD, IndiceCatalogo, Resolucion, TipoResolucion
 from app.dominio.diagnostico import (
     DiagAccion,
     DiagDesacuerdo,
@@ -43,7 +44,8 @@ from app.dominio.entrada import EntradaPedido
 from app.dominio.esquema_eventos import Evento
 from app.dominio.habitual import ultimo_entregado
 from app.dominio.resultado import Motivo, Pendiente
-from app.dominio.texto import EventoAnclado, extraer_medidas, localizar, texto_original
+from app.dominio.texto import UNIDADES_MEDIDA, EventoAnclado, extraer_medidas, localizar, texto_original
+from app.dominio.texto import plegar as plegar_texto
 from app.dominio.unidades import CodigoConversion, Conversion, LexicoUnidades, convertir
 
 CERO = Decimal(0)
@@ -71,6 +73,7 @@ class Entrada:
     incierta: bool = False
     unidad_declarada: str = "venta"
     unidad_texto: str | None = None
+    dimension: str | None = None  # D93: solo si se demostró que la unidad física es la de la cantidad total
 
     @classmethod
     def de_evento(cls, evento: Evento) -> Entrada:
@@ -148,6 +151,176 @@ class ResultadoPlegado:
 
 def _texto_decimal(valor: Decimal | None) -> str | None:
     return None if valor is None else f"{valor.normalize():f}"
+
+
+# ====================================================================== D93: evidencia de la cantidad total
+#
+# La dimensión física (volumen o masa) de una cantidad solo se registra si la evidencia demuestra que
+# la unidad física es la de la cantidad total y no la del envase. Ante cualquier duda, no se registra
+# y todo sigue como antes (principio conservador). Condiciones (todas):
+#   E1 hay cantidad y no es incierta; E2 unidad "otra" y `unidad_texto` termina en una unidad física;
+#   E3 la presentación no contiene medidas físicas;
+#   T2 la cifra del fragmento y la cantidad son el mismo Decimal (formatos válidos, sin ambigüedad);
+#   T3 en el fragmento hay exactamente una expresión numérica: esa cifra;
+#   T4 el fragmento sigue exactamente Q1 (P* N U de|del ART? PRODUCTO S*) o, en un `corregir` sin
+#      producto, Q2 (P* N U S*). PRODUCTO es el `producto` del evento, palabra por palabra.
+
+_NUMERO_VALIDO = re.compile(r"\d{1,5}(?:[.,]\d{1,3})?")
+_SEPARADOR_Y_TRES = re.compile(r"[.,]\d{3}$")  # «1.500» / «1,500»: miles o decimales -> ambiguo
+_FRASES_MEDIDA = tuple(
+    re.compile(p)
+    for p in (
+        r"\b(?:un\s+)?litro\s+y\s+medio\b", r"\b\d+\s+y\s+medio\b", r"\b\d+\s+\d+\s*/\s*\d+\b",
+        r"\bmedio\s+litro\b", r"\bmedia\s+libra\b", r"\blibra\s+y\s+media\b", r"\b(?:de|la|el|una)\s+(?:litro|libra)\b",
+    )
+)
+_FRACCION = re.compile(r"\d+\s*/\s*\d+")
+_CIFRA = re.compile(r"\d+(?:[.,]\d+)*")
+_PALABRAS_NUMERO = frozenset(
+    """un una uno unos unas dos tres cuatro cinco seis siete ocho nueve diez once doce trece catorce quince
+    dieciseis diecisiete dieciocho diecinueve veinte veintiuno veintidos veintitres veinticuatro veinticinco
+    veintiseis veintisiete veintiocho veintinueve treinta cuarenta cincuenta sesenta setenta ochenta noventa
+    cien ciento doscientos trescientos cuatrocientos quinientos seiscientos setecientos ochocientos novecientos
+    mil medio media mitad tercio cuarto par docena docenas""".split()
+)
+_PREFIJOS = frozenset(
+    tuple(f.split())
+    for f in (
+        "dame", "deme", "mandame", "mandeme", "manda", "mande", "mandar", "mandarme", "apunta", "apuntame", "apunteme",
+        "anota", "anotame", "anoteme", "trae", "traeme", "traigame", "necesito", "quiero", "agrega", "agregame",
+        "agregueme", "ponme", "pongame", "enviame", "envieme", "encargo",
+        "me", "le", "puede", "puedes", "podria",
+        "y", "tambien", "ademas", "mejor", "que", "sean", "son", "solo", "solamente",
+        "hola", "buenas", "buenos dias", "buenas tardes",
+        "por favor", "porfa", "porfis", "gracias", "muchas gracias",
+    )
+)
+_SUFIJOS = frozenset(tuple(f.split()) for f in ("por favor", "porfa", "porfis", "gracias", "muchas gracias"))
+_MAX_PREFIJOS, _MAX_SUFIJOS = 4, 3
+_SEPARADORES = frozenset({"de", "del"})
+_ARTICULOS = frozenset({"el", "la", "los", "las"})
+_TOKEN = re.compile(r"(\d+(?:[.,]\d+)*)|([a-z]+)|([,.:;!¡?¿])|(\s+)")
+
+
+def _decimal_sin_ambiguedad(texto: str) -> Decimal | None:
+    """T2: «5», «5.0», «5,0», «1,5» -> Decimal; inválido, ambiguo («1.500») o cero -> None."""
+    limpio = texto.strip()
+    if not _NUMERO_VALIDO.fullmatch(limpio) or _SEPARADOR_Y_TRES.search(limpio):
+        return None
+    valor = Decimal(limpio.replace(",", "."))
+    return valor if valor > 0 else None
+
+
+def contar_expresiones_numericas(plegado: str) -> tuple[int, list[re.Match[str]]]:
+    """T3: expresiones numéricas por pasadas (frases, fracciones, cifras, palabras completas).
+
+    Cada coincidencia cuenta una vez y su tramo se borra antes de la pasada siguiente.
+    Devuelve el total y las cifras encontradas en la tercera pasada (sobre el texto ya reducido).
+    """
+    texto, total = plegado, 0
+    for patron in (*_FRASES_MEDIDA, _FRACCION):
+        texto, n = patron.subn(" ", texto)
+        total += n
+    cifras = list(_CIFRA.finditer(texto))
+    total += len(cifras)
+    texto = _CIFRA.sub(" ", texto)
+    total += sum(1 for palabra in re.findall(r"[a-z]+", texto) if palabra in _PALABRAS_NUMERO)
+    return total, cifras
+
+
+def _tokens(plegado: str) -> list[tuple[str, str]] | None:
+    """('N', cifra) | ('W', palabra) | ('P', puntuación); None si hay cualquier otro carácter."""
+    resultado, posicion = [], 0
+    while posicion < len(plegado):
+        m = _TOKEN.match(plegado, posicion)
+        if m is None:
+            return None
+        if m.group(1):
+            resultado.append(("N", m.group(1)))
+        elif m.group(2):
+            resultado.append(("W", m.group(2)))
+        elif m.group(3):
+            resultado.append(("P", m.group(3)))
+        posicion = m.end()
+    return resultado
+
+
+def _frases(tokens: list[tuple[str, str]], i: int, permitidas: frozenset[tuple[str, ...]], maximo: int) -> int | None:
+    """Consume frases permitidas (y puntuación) desde `i`; None si hay más de `maximo`."""
+    cuenta = 0
+    while i < len(tokens):
+        if tokens[i][0] == "P":
+            i += 1
+            continue
+        for largo in (2, 1):
+            tramo = tokens[i : i + largo]
+            if len(tramo) == largo and all(t[0] == "W" for t in tramo) and tuple(t[1] for t in tramo) in permitidas:
+                cuenta += 1
+                i += largo
+                break
+        else:
+            break
+        if cuenta > maximo:
+            return None
+    return i
+
+
+def _gramatica_t4(tokens: list[tuple[str, str]], unidad: tuple[str, int], producto: list[str] | None) -> str | None:
+    """T4: la cifra de la cantidad total si el fragmento sigue exactamente Q1 o Q2; si no, None."""
+    i = _frases(tokens, 0, _PREFIJOS, _MAX_PREFIJOS)
+    if i is None or i + 1 >= len(tokens) or tokens[i][0] != "N" or tokens[i + 1][0] != "W":
+        return None
+    cifra = tokens[i][1]
+    if UNIDADES_MEDIDA.get(tokens[i + 1][1]) != unidad:
+        return None
+    j = i + 2
+    if producto is not None:  # Q1
+        if j >= len(tokens) or tokens[j] not in {("W", s) for s in _SEPARADORES}:
+            return None
+        j += 1
+        if j < len(tokens) and tokens[j][0] == "W" and tokens[j][1] in _ARTICULOS and [t[1] for t in tokens[j : j + len(producto)]] != producto:
+            j += 1
+        if [t for t in tokens[j : j + len(producto)]] != [("W", p) for p in producto]:
+            return None
+        j += len(producto)
+    fin = _frases(tokens, j, _SUFIJOS, _MAX_SUFIJOS)
+    return cifra if fin == len(tokens) else None
+
+
+def dimension_cantidad_total(evento: Evento, fragmento: str) -> str | None:
+    """D93: "volumen" o "masa" si se demuestra que la unidad física es la de la cantidad total."""
+    if evento.cantidad is None or evento.cantidad_incierta:  # E1
+        return None
+    if evento.unidad != "otra" or not evento.unidad_texto:  # E2
+        return None
+    palabras_unidad = plegar_texto(evento.unidad_texto)[0].split()
+    unidad = UNIDADES_MEDIDA.get(palabras_unidad[-1]) if palabras_unidad else None
+    if unidad is None:
+        return None
+    if evento.presentacion and any(m.unidad in DIMENSION_DE_UNIDAD for m in extraer_medidas(evento.presentacion)):  # E3
+        return None
+    cantidad = _decimal_sin_ambiguedad(evento.cantidad)  # T2 (la cantidad del evento)
+    if cantidad is None:
+        return None
+    plegado = re.sub(r"\s+", " ", plegar_texto(fragmento)[0]).strip()
+    total, cifras = contar_expresiones_numericas(plegado)  # T3
+    if total != 1 or len(cifras) != 1:
+        return None
+    tokens = _tokens(plegado)
+    if tokens is None:
+        return None
+    if evento.producto:
+        producto = [t for t in re.findall(r"[a-z]+|\d+", plegar_texto(evento.producto)[0])]
+        if not producto or any(p.isdigit() for p in producto):
+            return None
+    elif evento.tipo == "corregir":
+        producto = None  # Q2
+    else:
+        return None
+    cifra = _gramatica_t4(tokens, unidad, producto)  # T4
+    if cifra is None or cifra != cifras[0].group(0) or _decimal_sin_ambiguedad(cifra) != cantidad:  # T2
+        return None
+    return DIMENSION_DE_UNIDAD[unidad[0]]
 
 
 class Plegador:
@@ -230,8 +403,18 @@ class Plegador:
     def _descripcion(self, ea: EventoAnclado) -> str:
         return ea.evento.descripcion() or self._fragmento(ea)
 
-    def _resolver(self, ea: EventoAnclado, descripcion: str) -> Resolucion:
-        r = self.indice.resolver(descripcion, ea.evento.candidatos)
+    def _entrada(self, ea: EventoAnclado) -> Entrada:
+        """La cantidad del evento; D93: con su dimensión física solo si la evidencia lo demuestra."""
+        entrada = Entrada.de_evento(ea.evento)
+        dimension = dimension_cantidad_total(ea.evento, self._fragmento(ea))
+        return replace(entrada, dimension=dimension) if dimension else entrada
+
+    def _resolver(self, ea: EventoAnclado, descripcion: str, entradas: Sequence[Entrada] = ()) -> Resolucion:
+        dimensiones = frozenset(x.dimension for x in entradas if x.dimension)
+        if dimensiones:  # D93
+            r = self.indice.resolver(descripcion, ea.evento.candidatos, dimensiones)
+        else:  # sin dimensión: exactamente la llamada anterior
+            r = self.indice.resolver(descripcion, ea.evento.candidatos)
         for codigo in r.codigos:
             if codigo in CODIGOS_DESACUERDO:
                 self.desacuerdos.append(DiagDesacuerdo(ea.evento.id, codigo))
@@ -425,9 +608,10 @@ class Plegador:
             self._registrar(ea, "CANTIDAD_CERO")  # D62
             return
         descripcion = self._descripcion(ea)
-        r = self._resolver(ea, descripcion)
+        entradas = [self._entrada(ea)]
+        r = self._resolver(ea, descripcion, entradas)
         item, codigo = self._materializar(
-            ea, r, [Entrada.de_evento(e)], self.vocab.extraer(descripcion), [e.id], fusionable=True
+            ea, r, entradas, self.vocab.extraer(descripcion), [e.id], fusionable=True
         )
         if item is None:
             self._registrar(ea, codigo)
@@ -467,7 +651,7 @@ class Plegador:
         e = ea.evento
         descripcion = e.descripcion()
         atributos = self.vocab.extraer(descripcion) if descripcion else Atributos()
-        nueva = self._entrada_nueva(e)
+        nueva = self._entrada_nueva(ea)
         entradas = [nueva] if nueva else list(eliminado.entradas)
         if atributos.vacio and eliminado.sku and eliminado.motivo is not Motivo.PRODUCTO_AMBIGUO:
             r = Resolucion(TipoResolucion.RESUELTO, sku=eliminado.sku, opciones=(eliminado.sku,))
@@ -476,7 +660,7 @@ class Plegador:
             combinado = eliminado.atributos
         else:
             combinado = combinar(eliminado.atributos, atributos)
-            r = self._resolver(ea, a_descripcion(combinado) or self._descripcion(ea))
+            r = self._resolver(ea, a_descripcion(combinado) or self._descripcion(ea), entradas)
         item, codigo = self._materializar(ea, r, entradas, combinado, [e.id], fusionable=False)
         if item is None:
             self._registrar(ea, codigo)
@@ -484,17 +668,17 @@ class Plegador:
         self.por_evento[e.id] = item.id
         self._registrar(ea, "REAGREGAR_" + codigo, item)
 
-    @staticmethod
-    def _entrada_nueva(evento: Evento) -> Entrada | None:
+    def _entrada_nueva(self, ea: EventoAnclado) -> Entrada | None:
+        evento = ea.evento
         if evento.cantidad is None and not evento.cantidad_incierta:
             return None
-        return Entrada.de_evento(evento)
+        return self._entrada(ea)
 
     def _aplicar_correccion(self, ea: EventoAnclado, destino: Item) -> None:
         e = ea.evento
         descripcion = e.descripcion()
         atributos = self.vocab.extraer(descripcion) if descripcion else Atributos()
-        nueva = self._entrada_nueva(e)
+        nueva = self._entrada_nueva(ea)
         if destino.clase is Clase.LINEA:
             cambia_producto = not atributos.vacio and not self.vocab.cumple(atributos, destino.sku)
             if cambia_producto:
@@ -539,8 +723,8 @@ class Plegador:
         """D48, D48-a, D48-b, D48-c: reemplazo atómico del producto de una línea."""
         e = ea.evento
         combinado = combinar(linea.atributos, atributos)
-        r = self._resolver(ea, a_descripcion(combinado))
         entradas = [nueva] if nueva else list(linea.entradas)  # D48-b: cantidad tal como se expresó
+        r = self._resolver(ea, a_descripcion(combinado), entradas)
         if r.tipo is TipoResolucion.RESUELTO and r.sku == linea.sku:
             self._corregir_cantidad_linea(ea, linea, nueva, "PRECISION_COMPATIBLE")
             return
@@ -608,8 +792,8 @@ class Plegador:
             return
         # D69: cambia el producto: combinar descripciones y resolver de nuevo (atómico).
         combinado = combinar(pendiente.atributos, atributos)
-        r = self._resolver(ea, a_descripcion(combinado) or e.descripcion())
         entradas = [nueva] if nueva else list(pendiente.entradas)
+        r = self._resolver(ea, a_descripcion(combinado) or e.descripcion(), entradas)
         nuevo, codigo = self._materializar(ea, r, entradas, combinado, pendiente.origen + [e.id], fusionable=False, excluir=pendiente)
         if nuevo is None:  # cantidad 0
             self._eliminar(pendiente, e.id)
