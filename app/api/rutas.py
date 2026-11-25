@@ -3,6 +3,10 @@
 - `POST /v1/pedidos/interpretar`: 200 con los 9 campos del Anexo; 422 (D78), 404 (D79), 503 con
   `Retry-After: 10` (D18, D80) o 500 genérico (D82), en el orden 422 -> 404 -> 503 (D83).
 - `GET /health`: siempre 200, `ok` o `degradado` con motivo (D81).
+- Fuera del contrato: una ruta inexistente responde 404 `{"detail": "Ruta no encontrada"}` y un
+  método no permitido 405 `{"detail": "Método no permitido"}` con el encabezado `Allow`, sin la
+  ruta, los parámetros ni los valores recibidos. El 404 de negocio (cliente inexistente, D79)
+  conserva `{"detail": "Cliente no encontrado"}`.
 
 Los errores están en español y nunca incluyen el valor recibido, el texto de los mensajes, el
 `cliente_id` ni detalles internos. El log propio solo registra método, ruta, código, duración y
@@ -15,8 +19,10 @@ import logging
 import time
 
 from fastapi import APIRouter, FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import errores
 from app.api.esquemas import SolicitudPedido
@@ -28,6 +34,10 @@ from app.servicio import ErrorInterno
 
 RUTA_PEDIDOS = "/v1/pedidos/interpretar"
 RUTA_SALUD = "/health"
+
+# Errores del enrutador (fuera del contrato del Anexo): cuerpos fijos en español, sin eco.
+DETALLE_RUTA_NO_ENCONTRADA = "Ruta no encontrada"
+DETALLE_METODO_NO_PERMITIDO = "Método no permitido"
 
 log = logging.getLogger("novadistribuidora.api")
 router = APIRouter()
@@ -74,3 +84,17 @@ def registrar_manejadores(app: FastAPI) -> None:
     async def _validacion(_request: Request, error: RequestValidationError) -> JSONResponse:
         log.info("%s -> 422", _request.url.path)
         return JSONResponse(status_code=422, content=errores.cuerpo_422(error.errors()))
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _enrutador(request: Request, error: StarletteHTTPException) -> Response:
+        """Errores del enrutador, fuera del contrato del Anexo: cuerpo fijo en español, sin la
+        ruta, los parámetros ni los valores recibidos. El 404 de cliente inexistente (D79) no pasa
+        por aquí: lo responde la ruta de pedidos."""
+        if error.status_code == 404:
+            log.info("ruta no encontrada -> 404")  # sin la ruta: puede contener datos del usuario
+            return JSONResponse(status_code=404, content={"detail": DETALLE_RUTA_NO_ENCONTRADA})
+        if error.status_code == 405:
+            log.info("método no permitido -> 405")
+            allow = (error.headers or {}).get("Allow")
+            return JSONResponse(status_code=405, content={"detail": DETALLE_METODO_NO_PERMITIDO}, headers={"Allow": allow} if allow else None)
+        return await http_exception_handler(request, error)

@@ -118,6 +118,10 @@ DATA_DIR=datos .venv/bin/python -m app.main
   - E2b: `rutas.py` (`POST /v1/pedidos/interpretar` y `GET /health`; orden 422 -> 404 -> 503,
     D83), `salud.py` (sondas inyectables, siempre 200, D81) y `limites_http.py` (middleware de
     1 MiB que cuenta los bytes recibidos, sin confiar en `Content-Length`; 422, D87).
+    Fuera del contrato (revisión del PR #7, opción A): ruta inexistente -> 404
+    `{"detail": "Ruta no encontrada"}`; método no permitido -> 405
+    `{"detail": "Método no permitido"}` con `Allow`; sin la ruta, los parámetros ni los valores.
+    No confundir con el 404 de negocio (D79): `{"detail": "Cliente no encontrado"}`.
 - `app/servicio.py` (E2b): cliente (404 sin llamar al intérprete) -> intérprete (503) ->
   `validar_interpretacion` (503 si es inválida) -> `procesar_pedido` (500 genérico ante cualquier
   error) -> `RespuestaPedido`. Nunca expone el `cliente_id` ni detalles internos.
