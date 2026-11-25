@@ -49,6 +49,9 @@ lenguaje y produce eventos con salida estructurada; un motor determinista calcul
 
 # Pruebas de referencia con datos reales locales (nunca versionados)
 DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pytest -q -m referencia
+
+# API (puerto 8000, sin access log). Hasta E3 los pedidos responden 503 y /health "degradado".
+DATA_DIR=datos .venv/bin/python -m app.main
 ```
 
 ## Estructura
@@ -112,6 +115,22 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
     serializador JSON propio.
   - `errores.py`: 422 en español sin eco del valor recibido (D78), 404 sin `cliente_id` (D79),
     500 genérico (D82) y `RETRY_AFTER_SEGUNDOS = 10` en **todos** los 503 (D18).
+  - E2b: `rutas.py` (`POST /v1/pedidos/interpretar` y `GET /health`; orden 422 -> 404 -> 503,
+    D83), `salud.py` (sondas inyectables, siempre 200, D81) y `limites_http.py` (middleware de
+    1 MiB que cuenta los bytes recibidos, sin confiar en `Content-Length`; 422, D87).
+- `app/servicio.py` (E2b): cliente (404 sin llamar al intérprete) -> intérprete (503) ->
+  `validar_interpretacion` (503 si es inválida) -> `procesar_pedido` (500 genérico ante cualquier
+  error) -> `RespuestaPedido`. Nunca expone el `cliente_id` ni detalles internos.
+- `app/interprete/` (E2b): interfaz `Interprete` (`interpretar`, `estado`). En producción, hasta
+  E3, `InterpreteNoConfigurado` (D80): 503 y `/health` "degradado". Los intérpretes falsos y el de
+  referencia existen **solo en las pruebas** (`tests/fixtures/interprete_falso.py`,
+  `tests/referencia/test_api_dev.py`).
+- `app/main.py` (E2b): `crear_app(configuracion, datos, interprete, sondas)`; carga los datos de
+  `DATA_DIR` al arrancar y **no arranca** si faltan o son inválidos (D24; el error solo muestra
+  códigos y archivos); `Recursos` una sola vez (D68); `ejecutar()` en el puerto 8000 sin access
+  log (D88). `X-Request-ID` queda para E4 (D84). `app/config.py`: `DATA_DIR`.
+- Logs de la API: solo método, ruta, código, duración y estado del pedido (o el tipo de un error
+  interno). Nunca el cuerpo, los mensajes, el `cliente_id` ni el texto de los pendientes.
 - `tests/unit/`, `tests/integracion/`: con datos sintéticos inventados (`tests/fixtures/`).
 - `tests/referencia/`: con datos reales y casos de desarrollo locales (marcador `referencia`).
   Los resultados esperados se leen siempre desde `EVAL_DEV_PATH`; nunca se copian al repositorio.

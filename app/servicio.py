@@ -1,0 +1,72 @@
+"""Servicio de pedidos (E2b): solicitud validada (E2a) -> intérprete -> motor (E1b) -> respuesta.
+
+Orden (D83), después de que el esquema ya validó la solicitud (422):
+1. Cliente: si no existe, `ClienteNoEncontrado` (404) **sin llamar al intérprete**.
+2. Intérprete: cualquier fallo -> `InterpreteNoDisponible` (503).
+3. Interpretación: se valida con el punto de entrada único `validar_interpretacion` (D72); si es
+   inválida -> `InterpreteNoDisponible` (503). Así una interpretación mala no se confunde con un
+   error interno del motor.
+4. Motor: `procesar_pedido` (E1b, sin cambios). Cualquier error aquí es interno (500).
+5. Respuesta: `RespuestaPedido.desde_resultado` (E2a), traducción uno a uno.
+
+El diagnóstico del dominio no sale de aquí (se usará en E4).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from app.api.esquemas import RespuestaPedido, SolicitudPedido
+from app.datos.modelos import Datos
+from app.dominio.errores import ClienteNoEncontrado
+from app.dominio.limites import validar_interpretacion
+from app.dominio.pedido import Recursos, ResultadoPedido, procesar_pedido
+from app.interprete.base import Interprete, InterpreteNoDisponible
+
+
+class ErrorInterno(Exception):
+    """Error inesperado al procesar un pedido (500). Solo conserva el tipo del error original."""
+
+    def __init__(self, tipo: str):
+        self.tipo = tipo
+        super().__init__("error interno")
+
+
+@dataclass(frozen=True)
+class Atencion:
+    respuesta: RespuestaPedido
+    resultado: ResultadoPedido
+
+
+class ServicioPedidos:
+    def __init__(self, datos: Datos, recursos: Recursos, interprete: Interprete):
+        self.datos = datos
+        self.recursos = recursos
+        self.interprete = interprete
+
+    def atender(self, solicitud: SolicitudPedido) -> Atencion:
+        entrada = solicitud.a_entrada()
+        # 1. Cliente (404) antes del intérprete. El mensaje de ClienteNoEncontrado (E1a) incluye el
+        #    cliente_id: la API nunca lo muestra ni lo registra.
+        if entrada.cliente_id not in self.datos.clientes:
+            raise ClienteNoEncontrado(entrada.cliente_id)
+        # 2. Intérprete (503).
+        try:
+            bruto = self.interprete.interpretar(entrada)
+        except InterpreteNoDisponible:
+            raise
+        except Exception:  # noqa: BLE001 - cualquier fallo del intérprete es un 503
+            raise InterpreteNoDisponible("el intérprete falló") from None
+        # 3. Interpretación (503 si es inválida), por el punto de entrada único (D72).
+        try:
+            interpretacion = validar_interpretacion(
+                bruto.model_dump() if hasattr(bruto, "model_dump") else bruto, len(entrada.mensajes)
+            )
+        except Exception:  # noqa: BLE001 - ValidationError, LimitesExcedidos u otro formato
+            raise InterpreteNoDisponible("interpretación inválida") from None
+        # 4. Motor (500 ante cualquier error).
+        try:
+            resultado = procesar_pedido(entrada, interpretacion, self.datos, recursos=self.recursos)
+            return Atencion(RespuestaPedido.desde_resultado(resultado), resultado)
+        except Exception as error:  # noqa: BLE001 - HistorialInconsistente, invariantes, etc.
+            raise ErrorInterno(type(error).__name__) from None
