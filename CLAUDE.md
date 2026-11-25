@@ -99,6 +99,19 @@ DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pyte
       vocabulario, detector y redactor (D68).
 - `app/mensajes/confirmacion.py`: mensaje al cliente con plantillas (D16 sin montos, D49, D65,
   saludo y fecha según 3.6). Nunca usa texto del cliente ni el texto de los pendientes.
+- `app/api/` (E2a): contrato HTTP del Anexo, sin rutas todavía (las rutas, el servicio, la salud
+  y el arranque son de E2b).
+  - `esquemas.py`: `SolicitudPedido` (validación estricta D15; límites de D56; campos adicionales
+    ignorados, D77) y `RespuestaPedido` (exactamente los **9 campos** de primer nivel del Anexo,
+    sin claves adicionales en ningún nivel). `cliente_id` admite **como máximo 64 caracteres**
+    (D90), contados como caracteres (`len()`, puntos de código), no como bytes UTF-8: es una
+    restricción del contrato de la API. `fecha_hora` solo con dígitos ASCII.
+  - Montos (D03, D91 opción A): `Decimal` en todo el cálculo; se convierten a número JSON solo
+    al serializar (`PlainSerializer(float, when_used="json")`). Se garantiza la igualdad
+    numérica exacta, no un texto concreto (`1164.00` se escribe `1164.0`). No escribir un
+    serializador JSON propio.
+  - `errores.py`: 422 en español sin eco del valor recibido (D78), 404 sin `cliente_id` (D79),
+    500 genérico (D82) y `RETRY_AFTER_SEGUNDOS = 10` en **todos** los 503 (D18).
 - `tests/unit/`, `tests/integracion/`: con datos sintéticos inventados (`tests/fixtures/`).
 - `tests/referencia/`: con datos reales y casos de desarrollo locales (marcador `referencia`).
   Los resultados esperados se leen siempre desde `EVAL_DEV_PATH`; nunca se copian al repositorio.
