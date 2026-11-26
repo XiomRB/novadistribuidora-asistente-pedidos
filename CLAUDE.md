@@ -163,6 +163,29 @@ DATA_DIR=datos .venv/bin/python -m app.main
     con lista blanca (D61-a, contención en `texto`, límite combinado de 20) y reconstruye los
     textos desde `EVAL_DEV_PATH`. Nunca agregar campos de texto a este archivo.
 - `datos/`: archivos `.parquet` colocados localmente (ignorados por Git).
+- `evaluacion/` (E2c-1): evaluador por HTTP (D33, D91). No es parte de la aplicación: `app/` nunca depende
+  de él y él tampoco depende de LLM ni de MLflow (`test_capas.py`). `python -m evaluacion --modo {e3,e6}
+  --registro R --base-url U --timeout S --salida-privada D` (códigos: 0 aprobado, 1 no aprobado,
+  2 integridad/formato/registro/datos/salida, 3 árbol de Git no limpio). El registro real de
+  conjuntos autorizados llega en E2c-2.
+  - Fase 1 (`conjuntos.py`): antes de cualquier petición verifica los SHA-256 de todos los archivos
+    (casos, esperadas y anotaciones), el formato, los recuentos, la coherencia y las anotaciones;
+    cualquier fallo es `ErrorIntegridad` con un código fijo (código 2 y 0 peticiones).
+  - Comparación (`comparacion.py`): estado, total, fecha, líneas, sustituciones, pendientes (motivo y
+    opciones) y motivos como multiconjuntos y `Decimal`; `mensaje_cliente` solo por contrato; texto
+    de los pendientes y clasificación aparte (U10 provisional, fuera del denominador del texto).
+  - Correspondencia (`correspondencia.py`): orden canónico de los ítems; representación por SKU o,
+    en pendientes sin opciones, por claves de palabras completas; prioridades lexicográficas
+    (emparejados, tipo, pureza, menor K4, desempate) con Kuhn-Munkres, nodos ficticios y pesos
+    enteros (`bases`). `genericas.py`: lista cerrada de 198 palabras (hash fijado en G-0).
+  - K1-K5 (`criticos.py`): K1 SKU distinto; K2 como máximo 1 por producto (líneas y sustituciones
+    por SKU solicitado); K3 solo en críticos; K4 por ítem libre que representa a un solo consultado;
+    K5 contrato o recálculo con E1a. Inválidos (HTTP, timeout, conexión, JSON) no son K5.
+  - Veredictos (`reporte.py`): E3 con la fórmula ponderada por casos (nunca promedio de porcentajes),
+    A1 >= 90 %, A2 K5 = 0, A3 sin K1-K4 en críticos; E6 alternativa A (3 repeticiones, cada una con
+    >= 90 %, K5 = 0 y sin K1-K4 en críticos; media y mínimo). Reportes solo con códigos, nombres
+    de campos, indicadores y agregados, fuera del repositorio (700 / 400); la Validación privada
+    solo publica su hash y si se aprobó. Nunca guardar cuerpos, mensajes, textos ni esperadas.
 
 ## Convenciones del dominio
 
