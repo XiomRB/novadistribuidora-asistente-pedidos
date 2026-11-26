@@ -5,6 +5,8 @@
 - La API, el servicio, la aplicación, la configuración y el intérprete no importan LangChain,
   OpenAI ni MLflow (llegan en E3 y E4, en sus módulos propios).
 - `float` solo aparece en `app/api/esquemas.py`, en el serializador de los montos (D03).
+- E2c: la aplicación (`app/`) nunca depende del evaluador (`evaluacion/`); el evaluador tampoco depende
+  de LangChain, OpenAI ni MLflow, y su correspondencia y sus veredictos no usan `float`.
 """
 
 import ast
@@ -17,6 +19,8 @@ NUCLEO = ["app/datos", "app/dominio", "app/mensajes"]
 BORDE = ["app/api", "app/interprete", "app/servicio.py", "app/main.py", "app/config.py"]
 CAPAS_EXTERNAS = ("app.api", "app.servicio", "app.main", "app.interprete", "app.config")
 PROHIBIDOS_EN_E2 = {"langchain", "langchain_core", "langchain_openai", "openai", "mlflow"}
+EVALUADOR = ["evaluacion"]
+SIN_FLOAT_EN_EVALUADOR = ["evaluacion/correspondencia.py", "evaluacion/criticos.py", "evaluacion/reporte.py", "evaluacion/comparacion.py", "evaluacion/conjuntos.py"]
 
 
 def _archivos(rutas):
@@ -72,5 +76,20 @@ def test_float_solo_en_el_serializador_de_montos(ruta):
         assert usos == []
 
 
+@pytest.mark.parametrize("ruta", _archivos(["app"]), ids=lambda p: str(p.relative_to(RAIZ)))
+def test_la_aplicacion_nunca_depende_del_evaluador(ruta):
+    assert not [n for n in _imports(ruta) if n == "evaluacion" or n.startswith("evaluacion.")]
+
+
+@pytest.mark.parametrize("ruta", _archivos(EVALUADOR), ids=lambda p: str(p.relative_to(RAIZ)))
+def test_el_evaluador_sin_llm_ni_mlflow(ruta):
+    assert not [n for n in _imports(ruta) if n.split(".")[0] in PROHIBIDOS_EN_E2]
+
+
+@pytest.mark.parametrize("ruta", _archivos(SIN_FLOAT_EN_EVALUADOR), ids=lambda p: str(p.relative_to(RAIZ)))
+def test_el_evaluador_compara_y_pondera_sin_float(ruta):
+    assert _usos_de_float(ast.parse(ruta.read_text(encoding="utf-8"))) == []
+
+
 def test_hay_archivos_en_cada_capa():
-    assert len(_archivos(NUCLEO)) >= 20 and len(_archivos(BORDE)) >= 8
+    assert len(_archivos(NUCLEO)) >= 20 and len(_archivos(BORDE)) >= 8 and len(_archivos(EVALUADOR)) >= 9
