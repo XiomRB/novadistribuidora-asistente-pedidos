@@ -1,6 +1,7 @@
 """E2c-1: K1, K2 (con sustituciones por SKU solicitado), K5 (contrato y recálculo con E1a) y la
 evaluación completa de un caso. Catálogo sintético de E1b: PHD está agotado y su sustituto es PH4."""
 
+import dataclasses
 import json
 from datetime import datetime
 from decimal import Decimal
@@ -9,6 +10,7 @@ import pytest
 
 from app.dominio.cierre import cerrar_pedido
 from app.dominio.resultado import LineaSolicitada, Sustitucion
+from evaluacion import criticos
 from evaluacion.conjuntos import Caso
 from evaluacion.criticos import evaluar_caso, recalculo_coincide
 from tests.fixtures.evaluacion_e2c import NE, L, P, S, a_json, anot, cuerpo, esperado, medir
@@ -113,3 +115,46 @@ def test_un_k_hace_incorrecto_el_caso_y_marca_el_critico(datos):
     obtenido = cuerpo_valido(datos, [("CL1", 1)])
     r = evaluar_caso(_caso(esp), anot(["zqxkiwi"]), "OK", json.loads(a_json(obtenido)), obtenido, datos)
     assert r.k1 == 1 and r.k3 == 1 and not r.correcto and r.critico_con_error
+
+
+# ---------------------------------------------------------------- K5: sustituciones en el recálculo
+
+
+def test_k5_compara_las_sustituciones_con_las_de_e1a(datos, esperado_sust, monkeypatch):
+    """La respuesta es coherente, pero E1a devuelve otras sustituciones: el recálculo no coincide."""
+    obtenido = cuerpo_valido(datos, [("PH4", 3)], [("PHD", "PH4", 3)])
+    assert recalculo_coincide(obtenido, ENTRADA, datos)
+    original = criticos.cerrar_pedido
+    alternativas = {
+        "cantidad": (Sustitucion("PHD", "PH4", Decimal(2)),),
+        "sin_sustitucion": (),
+        "duplicada": (Sustitucion("PHD", "PH4", Decimal(3)),) * 2,
+    }
+    for nombre, sustituciones in alternativas.items():
+        monkeypatch.setattr(criticos, "cerrar_pedido", lambda **k: dataclasses.replace(original(**k), sustituciones=sustituciones))
+        assert not recalculo_coincide(obtenido, ENTRADA, datos), nombre
+        r = evaluar_caso(_caso(esperado_sust), anot(["zqxpapel"]), "OK", json.loads(a_json(obtenido)), obtenido, datos)
+        assert r.k5 == 1 and not r.correcto and r.campos_distintos == () and r.k2 == 0, nombre  # solo K5 lo detecta
+
+
+def test_k5_sustituciones_iguales_como_multiconjunto_y_decimal(datos):
+    obtenido = cuerpo_valido(datos, [("PH4", 3)], [("PHD", "PH4", 3)])
+    obtenido["sustituciones"][0]["cantidad"] = Decimal("3.0")
+    assert recalculo_coincide(obtenido, ENTRADA, datos)
+
+
+@pytest.mark.parametrize(
+    ("nombre", "sustitucion"),
+    [
+        ("supera_la_linea", ("PHD", "PH4", 4)),
+        ("hacia_sku_sin_linea", ("PHD", "GS6", 1)),
+        ("no_respaldada_por_el_catalogo", ("GS2", "PH4", 1)),
+        ("cantidad_no_positiva", ("PHD", "PH4", 0)),
+    ],
+)
+def test_k5_invariantes_de_sustituciones_invalidas(datos, esperado_sust, nombre, sustitucion):
+    obtenido = cuerpo_valido(datos, [("PH4", 3)], [("PHD", "PH4", 3)])
+    obtenido["sustituciones"] = [S(*sustitucion)]
+    assert not recalculo_coincide(obtenido, ENTRADA, datos)
+    r = evaluar_caso(_caso(esperado_sust), anot(["zqxpapel"]), "OK", json.loads(a_json(obtenido)), obtenido, datos)
+    assert r.k5 == 1 and not r.correcto

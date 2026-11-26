@@ -9,7 +9,8 @@ un consultado).
   sustitución del producto (identificada por su SKU solicitado) frente a la esperada, o un pendiente
   esperado de `cantidad_no_convertible` resuelto como línea.
 - K5 compara la respuesta consigo misma: respuesta 200 fuera del contrato, o valores que no
-  coinciden al recalcularla con E1a (`cerrar_pedido`, con sus invariantes de sustituciones).
+  coinciden al recalcularla con E1a (`cerrar_pedido`, con sus invariantes de sustituciones): estado,
+  líneas, sustituciones, total, fecha y motivos se comparan explícitamente con el resultado de E1a.
 - Los inválidos (HTTP distinto de 200, timeout, conexión, JSON inválido) son incorrectos, no K5.
 """
 
@@ -78,10 +79,12 @@ def recalculo_coincide(cuerpo: Mapping[str, Any], entrada: Mapping[str, Any], da
         return False
     obtenido = comparacion.normalizar(cuerpo)
     recalculado = Counter((l.sku, l.cantidad, l.precio_unitario, l.descuento_pct, l.subtotal) for l in r.lineas)
+    sustituciones_recalculadas = Counter((s.sku_solicitado, s.sku_entregado, s.cantidad) for s in r.sustituciones)
     return (
         cuerpo["cliente_id"] == entrada["cliente_id"]
         and obtenido.estado == r.estado.value
         and obtenido.lineas == recalculado
+        and obtenido.sustituciones == sustituciones_recalculadas
         and obtenido.total == r.total
         and obtenido.fecha_entrega == (r.fecha_entrega.isoformat() if r.fecha_entrega else None)
         and obtenido.motivos_revision == Counter(m.value for m in r.motivos_revision)
