@@ -29,10 +29,22 @@ Los candidatos del LLM nunca son evidencia textual. Reglas, en este orden de pre
 - R1-b (D45, sin cambios): sin ancla, sin tokens conocidos (jerga pura: "cocas", "chescos") ->
   resolución original: ambiguo con los hermanos de los candidatos o NO_EXISTE sin candidatos (R1-c).
 - R2: ancla y algún token desconocido (marca o variante que no vendemos) -> AMBIGUO sin opciones.
-  Única excepción: se conserva el NO_EXISTE de la resolución original cuando se debe a medidas
-  explícitas contradictorias (código MEDIDA_SIN_PRODUCTO). Cualquier otro NO_EXISTE (p. ej.
-  SIN_COINCIDENCIAS) queda como AMBIGUO sin opciones.
+  Excepciones: se conserva el NO_EXISTE cuando se debe a medidas explícitas contradictorias
+  (código MEDIDA_SIN_PRODUCTO) o, desde D93, a la dimensión de la cantidad total
+  (DIMENSION_CANTIDAD_INCOMPATIBLE). Cualquier otro NO_EXISTE (p. ej. SIN_COINCIDENCIAS) queda
+  como AMBIGUO sin opciones.
 - En todos los casos, una mención sin ancla nunca produce una línea (resuelto o agotado).
+
+D93 (dimensión de la cantidad total), entre la resolución por texto y las reglas de D92. Solo con
+`dimensiones` (las que el plegado demostró para la cantidad total: "volumen" o "masa"):
+- La dimensión de un producto sale de las medidas de su presentación (ml -> volumen; g, lb -> masa);
+  sin una sola dimensión (rollos, paquetes, sobres) nunca se descarta.
+- Se descartan las opciones cuya dimensión no coincide con todas las dimensiones de la cantidad.
+  Ninguna compatible -> NO_EXISTE (código interno DIMENSION_CANTIDAD_INCOMPATIBLE). Algunas -> se
+  conservan solo esas, sin confirmar nunca un producto (si había varias, sigue ambiguo).
+- Solo se compara la dimensión, nunca el valor: el valor lo decide la conversión de siempre.
+- R2 conserva ese NO_EXISTE igual que el de MEDIDA_SIN_PRODUCTO.
+- Sin `dimensiones`, `resolver` se comporta exactamente como antes.
 """
 
 from __future__ import annotations
@@ -52,6 +64,12 @@ PESO_EVIDENCIA = 7  # D92: la misma tolerancia a errores leves que el resto de l
 # las fijas del léxico de unidades de E1b-1 (`SUELTAS` y `DOCENAS`); `IndiceCatalogo.__init__`
 # les agrega `palabras_cantidad` (si se recibe) y las unidades de venta del catálogo cargado.
 _UNIDADES_BASE = frozenset(SUELTAS) | DOCENAS
+
+
+# D93: dimensión física de cada unidad base de `extraer_medidas`.
+DIMENSION_DE_UNIDAD = {"ml": "volumen", "g": "masa", "lb": "masa"}
+CODIGO_DIMENSION = "DIMENSION_CANTIDAD_INCOMPATIBLE"
+_CONSERVAN_NO_EXISTE = frozenset({"MEDIDA_SIN_PRODUCTO", CODIGO_DIMENSION})  # excepciones de R2
 
 
 class Evidencia(StrEnum):
@@ -145,6 +163,11 @@ class IndiceCatalogo:
         unidades = set(_UNIDADES_BASE) | set(palabras_cantidad)
         unidades |= {normalizar_texto(p.unidad_venta) for p in datos.productos.values()}
         self.unidades = frozenset(unidades)
+        # D93: dimensión de cada producto según su presentación (None si no hay una sola).
+        self.dimension: dict[str, str | None] = {}
+        for sku, producto in datos.productos.items():
+            dimensiones = {DIMENSION_DE_UNIDAD[m.unidad] for m in extraer_medidas(producto.presentacion) if m.unidad in DIMENSION_DE_UNIDAD}
+            self.dimension[sku] = next(iter(dimensiones)) if len(dimensiones) == 1 else None
 
     # ------------------------------------------------------------ consultas del índice
 
@@ -206,7 +229,21 @@ class IndiceCatalogo:
 
     # ------------------------------------------------------------ resolución
 
-    def resolver(self, descripcion: str, candidatos_llm: Sequence[str] = ()) -> Resolucion:
+    def _filtrar_dimension(self, r: Resolucion, dimensiones: frozenset[str]) -> Resolucion:
+        """D93: descarta las opciones de otra dimensión física; nunca confirma un producto."""
+        if r.tipo is TipoResolucion.NO_EXISTE:
+            return r
+        opciones = r.opciones or ((r.sku,) if r.sku else ())
+        quedan = tuple(s for s in opciones if self.dimension.get(s) is None or dimensiones == {self.dimension[s]})
+        if len(quedan) == len(opciones):
+            return r
+        if not quedan:
+            return Resolucion(TipoResolucion.NO_EXISTE, codigos=r.codigos + (CODIGO_DIMENSION,))
+        return Resolucion(TipoResolucion.AMBIGUO, opciones=quedan, codigos=r.codigos)
+
+    def resolver(
+        self, descripcion: str, candidatos_llm: Sequence[str] = (), dimensiones: frozenset[str] = frozenset()
+    ) -> Resolucion:
         evidencia = self.evidencia(descripcion)
         if evidencia is Evidencia.SIN_ANCLA_CON_CONOCIDO:
             # R1-a (prioridad sobre R1-b): la coincidencia parcial indica otro producto; los
@@ -219,6 +256,8 @@ class IndiceCatalogo:
                 codigos.append("CANDIDATOS_LLM_IGNORADOS")
             return Resolucion(TipoResolucion.NO_EXISTE, codigos=tuple(codigos + ["SIN_ANCLA_CATALOGO"]))
         r = self._resolver_por_texto(descripcion, candidatos_llm)
+        if dimensiones:
+            r = self._filtrar_dimension(r, frozenset(dimensiones))  # D93
         if evidencia is Evidencia.JERGA:
             # R1-b / R1-c: D45 sin cambios. Una mención sin ancla nunca produce una línea.
             if r.tipo in (TipoResolucion.RESUELTO, TipoResolucion.AGOTADO_SIN_SUSTITUTO):
@@ -226,8 +265,8 @@ class IndiceCatalogo:
             return r
         if evidencia is Evidencia.TOKEN_DESCONOCIDO:
             # R2: una marca o variante que no vendemos; ningún SKU cuenta con evidencia suficiente.
-            if r.tipo is TipoResolucion.NO_EXISTE and "MEDIDA_SIN_PRODUCTO" in r.codigos:
-                return r  # única excepción: medidas explícitas contradictorias
+            if r.tipo is TipoResolucion.NO_EXISTE and _CONSERVAN_NO_EXISTE & set(r.codigos):
+                return r  # excepciones: medidas explícitas contradictorias o dimensión (D93)
             return Resolucion(TipoResolucion.AMBIGUO, opciones=(), codigos=r.codigos + ("TOKEN_DESCONOCIDO",))
         return r
 

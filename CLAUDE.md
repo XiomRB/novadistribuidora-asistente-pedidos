@@ -77,6 +77,11 @@ DATA_DIR=datos .venv/bin/python -m app.main
     (`MEDIDA_SIN_PRODUCTO`), que conservan `producto_no_existe`. Una mención sin ancla nunca
     produce una línea. `CANDIDATOS_LLM_IGNORADOS` es interno de `Resolucion.codigos`. No
     agregar listas de marcas ni excepciones por número de palabras.
+    D93 (dimensión de la cantidad total): con `dimensiones`, `resolver` descarta las opciones cuya
+    dimensión física (volumen o masa, según su presentación) no coincide; ninguna ->
+    `producto_no_existe` (código interno `DIMENSION_CANTIDAD_INCOMPATIBLE`, que R2 conserva);
+    algunas -> solo esas, sin confirmar nunca un producto. Solo la dimensión, nunca el valor.
+    Sin `dimensiones`, el comportamiento es exactamente el anterior.
   - `unidades.py`: cantidades (`Decimal` desde texto), compatibilidad por presentación y UPE,
     `convertir()`; cantidades inciertas y sueltas sin número nunca se convierten (D46).
   - `consultas.py`: oraciones con posición y consulta pura = interrogativa sin marcador de compra (D36).
@@ -92,6 +97,12 @@ DATA_DIR=datos .venv/bin/python -m app.main
       coincidencia positiva y ninguna contradicción (D76).
     - `plegado.py`: ítems con identidad y bitácora (nunca se borran), referencias por cadena de
       sucesores, D37/D75, D10/D13/D76, D47, D48-a/b/c (atómico), D57, D58, D62, D63, D69.
+      D93: cada `Entrada` guarda la dimensión física solo si `dimension_cantidad_total` demuestra
+      que la unidad física es la de la cantidad total (E1-E3; T2 `Decimal` sin formatos ambiguos;
+      T3 una sola expresión numérica; T4 gramática cerrada Q1/Q2 con el producto exacto). Ante
+      cualquier duda no se registra. Se usa al resolver en agregar, reagregar, D48 y D69; las
+      correcciones de solo cantidad no vuelven a resolver (D63; decisiones A y B). No ampliar las
+      listas de prefijos, sufijos ni números sin autorización.
     - `sustitucion.py`: sustituciones después del plegado, fusionadas en la primera posición.
     - `diagnostico.py`: solo códigos, posiciones, SKU, cantidades y medidas normalizadas; nunca
       textos, `cliente_id` ni `pedido_id` (el habitual se registra como `habitual_usado`, D74).
