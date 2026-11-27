@@ -55,6 +55,23 @@ def test_el_borde_no_importa_llm_ni_mlflow_en_e2(ruta):
     assert not [n for n in _imports(ruta) if n.split(".")[0] in prohibidos]
 
 
+UNICOS_CON_MLFLOW = {"app/observabilidad/trazas.py"}  # hito 2; además el paquete evaluacion_mlflow/
+
+
+def test_mlflow_solo_en_las_trazas_y_en_evaluacion_mlflow():
+    """Hito 2: en `app/`, solo `app/observabilidad/trazas.py` usa MLflow; `evaluacion/` nunca."""
+    con_mlflow = {p.relative_to(RAIZ).as_posix() for p in _archivos(["app", "evaluacion"]) if any(n.split(".")[0] == "mlflow" for n in _imports(p))}
+    assert con_mlflow == UNICOS_CON_MLFLOW
+    assert any(any(n.split(".")[0] == "mlflow" for n in _imports(p)) for p in _archivos(["evaluacion_mlflow"]))
+    assert not [p for p in _archivos(["evaluacion_mlflow"]) if any(n.startswith("app.") for n in _imports(p))]
+
+
+@pytest.mark.parametrize("ruta", _archivos(["app/observabilidad"]), ids=lambda p: str(p.relative_to(RAIZ)))
+def test_observabilidad_sin_llm_ni_motor(ruta):
+    """La capa de observabilidad no usa LLM ni el motor determinista."""
+    assert not [n for n in _imports(ruta) if n.split(".")[0] in LLM or n.startswith(("app.dominio", "app.datos", "app.mensajes"))]
+
+
 def test_langchain_solo_en_el_interprete_llm():
     """En toda la aplicación, el único archivo que usa LangChain u OpenAI es el intérprete LLM."""
     con_llm = sorted(p.relative_to(RAIZ).as_posix() for p in _archivos(["app"]) if any(n.split(".")[0] in LLM for n in _imports(p)))

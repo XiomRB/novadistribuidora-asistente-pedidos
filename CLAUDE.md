@@ -175,6 +175,29 @@ OPENROUTER_PRUEBA_REAL=1 .venv/bin/python -m pytest -q -m openrouter
   clave nunca aparece en `repr`. El intérprete se construye en el arranque (`construir_interprete`).
 - Logs de la API: solo método, ruta, código, duración y estado del pedido (o el tipo de un error
   interno). Nunca el cuerpo, los mensajes, el `cliente_id` ni el texto de los pendientes.
+- `app/observabilidad/` (hito 2): trazas en MLflow y su estado para `/health`.
+  - `registro.py` (sin MLflow): un `Registro` por solicitud en una variable de contexto; el servicio y
+    el intérprete anotan tiempos y atributos (`medir`, `anotar`). Correlación de evaluaciones por
+    encabezados `X-Evaluacion-{Ejecucion,Caso,Conjunto,Repeticion,Privado}` (no son parte del contrato
+    JSON; valores seguros y acotados; sin `Privado: 0` explícito se trata como privado).
+  - `trazas.py`: el **único** archivo de `app/` que usa MLflow. Traza con tramos `pedido`,
+    `interprete` y `motor`. Modo `metadatos` (por defecto): recuentos, estados, códigos, latencias,
+    tokens, coste efectivo de OpenRouter (`None` si no se informa; nunca estimado), modelo, variante
+    y versión; nunca mensajes, `cliente_id`, instrucciones, texto de pendientes, SKU, cantidades,
+    importes, claves ni errores. Modo `completo` solo con almacén local, configuración explícita y un
+    conjunto público declarado; `CONJUNTOS_SOLO_METADATOS` (D39) lo impide en todos los casos. La
+    política (`contenido_permitido`, en `registro.py`) se aplica **al capturar**: sin autorización, el
+    contenido nunca entra en el `Registro` ni en el búfer; al exportar se comprueba otra vez. El hilo de
+    la solicitud solo encola en un búfer propio acotado; un único hilo propio exporta a MLflow (timeout
+    HTTP 2 s, reintentos 0, envío asíncrono de MLflow desactivado). Con MLflow no disponible o el búfer
+    lleno, la traza se descarta y se cuenta; el cierre drena el búfer con un límite de tiempo.
+  - `estado_mlflow.py` (sin MLflow): hilo de fondo que comprueba el servidor; `/health` solo lee el
+    estado: `mlflow_no_configurado`, `mlflow_no_disponible` u operativo, independiente del intérprete.
+- `evaluacion_mlflow/` (hito 2): `python -m evaluacion_mlflow --resumen <resumen_publico.json>`
+  registra un run con las métricas del **resumen público** (de un conjunto privado solo si se aprobó)
+  y suma tokens y coste solo con las trazas de esa ejecución (`evaluacion.ejecucion`). Si faltan
+  trazas o algún coste, `costes_completos=false` y no hay total. `evaluacion/` no usa MLflow
+  (`test_capas.py`); el evaluador envía la correlación y mide la latencia de cada petición.
 - `tests/unit/`, `tests/integracion/`: con datos sintéticos inventados (`tests/fixtures/`).
 - `tests/referencia/`: con datos reales y casos de desarrollo locales (marcador `referencia`).
   Los resultados esperados se leen siempre desde `EVAL_DEV_PATH`; nunca se copian al repositorio.

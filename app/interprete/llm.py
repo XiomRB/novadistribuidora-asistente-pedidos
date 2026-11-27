@@ -13,10 +13,14 @@
   llamada a función (la forma más compatible entre proveedores).
 - Privacidad: al modelo solo van las instrucciones y los mensajes delimitados (sin `cliente_id` ni
   fecha). Los errores nunca conservan el mensaje del proveedor, la clave ni la solicitud.
+- Hito 2: se pide a OpenRouter el coste real (`usage: {include: true}`) y la salida cruda
+  (`include_raw`). Tokens de entrada y salida y coste efectivo se anotan en la traza; si el proveedor
+  no informa el coste, queda `None` (nunca una estimación).
 """
 
 from __future__ import annotations
 
+import numbers
 import threading
 from typing import Any
 
@@ -26,6 +30,7 @@ from app.dominio.esquema_eventos import Interpretacion
 from app.dominio.limites import validar_interpretacion
 from app.interprete.base import MOTIVO_ERROR_INVOCACION, MOTIVO_NO_VERIFICADO, InterpreteNoDisponible
 from app.interprete.instrucciones import instrucciones_sistema, mensajes_usuario
+from app.observabilidad import registro as traza
 
 URL_OPENROUTER = "https://openrouter.ai/api/v1"
 MOTIVO_SALIDA_INVALIDA = "interpretacion_invalida"
@@ -51,6 +56,7 @@ class InterpreteLLM:
         except Exception:  # noqa: BLE001 - timeout, HTTP, autenticación o salida no estructurada
             self._registrar(False)
             raise InterpreteNoDisponible(MOTIVO_ERROR_INVOCACION) from None
+        bruto = _separar_uso(bruto)
         try:
             datos = bruto.model_dump() if hasattr(bruto, "model_dump") else bruto
             interpretacion = validar_interpretacion(datos, len(entrada.mensajes))
@@ -68,6 +74,28 @@ class InterpreteLLM:
         return (True, None) if operativo else (False, MOTIVO_ERROR_INVOCACION)
 
 
+def _uso(mensaje: Any) -> dict[str, Any]:
+    uso = getattr(mensaje, "usage_metadata", None) or {}
+    tokens = (getattr(mensaje, "response_metadata", None) or {}).get("token_usage") or {}
+    coste = tokens.get("cost")
+    return {
+        "tokens_entrada": uso.get("input_tokens", tokens.get("prompt_tokens")),
+        "tokens_salida": uso.get("output_tokens", tokens.get("completion_tokens")),
+        "coste_usd": coste if isinstance(coste, numbers.Real) and not isinstance(coste, bool) else None,
+        "modelo_respuesta": (getattr(mensaje, "response_metadata", None) or {}).get("model_name"),
+    }
+
+
+def _separar_uso(bruto: Any) -> Any:
+    """Con `include_raw`, la cadena devuelve {raw, parsed, parsing_error}: anota el uso y devuelve lo analizado."""
+    if isinstance(bruto, dict) and set(bruto) == {"raw", "parsed", "parsing_error"}:
+        traza.anotar("interprete", **{k: v for k, v in _uso(bruto["raw"]).items() if k != "modelo_respuesta" or v})
+        if bruto["parsing_error"] is not None:
+            return None  # salida no estructurada: se rechaza en la validación
+        return bruto["parsed"]
+    return bruto
+
+
 def crear_cadena_openrouter(modelo: str, clave: str, timeout_s: int, reintentos: int, http_client: Any = None) -> Any:
     from langchain_openai import ChatOpenAI  # solo aquí: el resto de la aplicación no depende de LangChain
 
@@ -79,8 +107,9 @@ def crear_cadena_openrouter(modelo: str, clave: str, timeout_s: int, reintentos:
         timeout=timeout_s,
         max_retries=reintentos,
         http_client=http_client,
+        extra_body={"usage": {"include": True}},  # OpenRouter informa el coste efectivo
     )
-    return chat.with_structured_output(Interpretacion, method="function_calling")
+    return chat.with_structured_output(Interpretacion, method="function_calling", include_raw=True)
 
 
 def crear_interprete_openrouter(config: Any, datos: Datos | None = None, http_client: Any = None) -> InterpreteLLM:

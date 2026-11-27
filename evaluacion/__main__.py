@@ -17,11 +17,13 @@ Los hashes autorizados nunca salen del registro, del entorno ni de la línea de 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import os
 import subprocess
 import sys
+import uuid
 from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
@@ -120,11 +122,14 @@ def _hashes_datos(directorio: Path) -> dict[str, str]:
     return {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(Path(directorio).glob("*.parquet"))}
 
 
-def _evaluar(conjunto: Conjunto, cliente: ClienteEvaluacion, datos) -> list:
+def _evaluar(conjunto: Conjunto, cliente: ClienteEvaluacion, datos, ejecucion_id: str = "", repeticion: int = 0) -> list:
     resultados = []
+    privado = "1" if conjunto.descriptor.privado else "0"
     for caso in conjunto.casos:
-        r = cliente.enviar(caso.entrada)
-        resultados.append(evaluar_caso(caso, conjunto.anotaciones.get(caso.id), r.codigo, r.cuerpo, r.cuerpo_decimal, datos))
+        correlacion = {"ejecucion": ejecucion_id, "caso": caso.id, "conjunto": conjunto.descriptor.id, "repeticion": str(repeticion), "privado": privado}
+        r = cliente.enviar(caso.entrada, correlacion if ejecucion_id else None)
+        resultado = evaluar_caso(caso, conjunto.anotaciones.get(caso.id), r.codigo, r.cuerpo, r.cuerpo_decimal, datos)
+        resultados.append(dataclasses.replace(resultado, latencia_ms=r.latencia_ms))
     return resultados
 
 
@@ -154,16 +159,19 @@ def ejecutar(
         imprimir(error.codigo)
         return 2
     cliente = cliente or ClienteEvaluacion(base_url, timeout)
+    ejecucion_id = uuid.uuid4().hex  # hito 2: correlación con las trazas del servidor
     repeticiones = 1 if modo == "e3" else reporte.REPETICIONES_E6
     por_conjunto: dict[str, list] = {c.descriptor.id: [] for c in conjuntos}
     casos_privados: dict[str, list] = {c.descriptor.id: [] for c in conjuntos}
-    for _ in range(repeticiones):
+    for repeticion in range(repeticiones):
         for c in conjuntos:
-            resultados = _evaluar(c, cliente, datos)
+            resultados = _evaluar(c, cliente, datos, ejecucion_id, repeticion)
             por_conjunto[c.descriptor.id].append(reporte.resumir(resultados))
             casos_privados[c.descriptor.id].append([reporte.caso_dict(r) for r in resultados])
     metadatos = {
-        "version": VERSION, "modo": modo, "git": _sha_git(raiz), "base_url": base_url, "timeout": timeout,
+        "version": VERSION, "modo": modo, "git": _sha_git(raiz), "base_url": base_url, "timeout": timeout, "ejecucion_id": ejecucion_id,
+        "repeticiones": repeticiones, "casos_por_conjunto": {c.descriptor.id: len(c.casos) for c in conjuntos},
+        "privados": sorted(c.descriptor.id for c in conjuntos if c.descriptor.privado),
         "conjuntos": {c.descriptor.id: dict(c.descriptor.sha256) for c in conjuntos}, "datos": _hashes_datos(directorio_datos),
     }
     privado: dict[str, Any] = {"metadatos": metadatos, "conjuntos": {}}
