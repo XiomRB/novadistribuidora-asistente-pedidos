@@ -5,6 +5,10 @@ número de línea): nunca lleva mensajes, respuestas esperadas, claves ni el tex
 
 Archivos lógicos de un conjunto: `casos` (JSONL con el formato de los casos de desarrollo),
 `esperadas` (opcional, JSON canónico con las respuestas esperadas) y `anotaciones` (JSON).
+
+Excepción de clave genérica: un producto puede llevar `clave_generica` (una clave hecha solo de
+palabras genéricas) únicamente en un par (conjunto, caso) de `EXCEPCIONES_CLAVE_GENERICA` que su
+descriptor declare. El literal vive solo en las anotaciones privadas; aquí solo hay identificadores.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from app.datos.normalizacion import normalizar_texto
@@ -27,6 +32,12 @@ CLAVES_LINEA = {"sku", "cantidad", "precio_unitario", "descuento_pct", "subtotal
 CLAVES_SUSTITUCION = {"sku_solicitado", "sku_entregado", "cantidad"}
 CLAVES_PENDIENTE = {"motivo", "texto", "opciones"}
 MIN_CARACTERES_DISTINTIVA = 3
+# Único par autorizado (revisión del PR #10). Ampliarlo exige modificar el código mediante un PR revisado.
+EXCEPCIONES_CLAVE_GENERICA = frozenset({("D39", "U03")})
+MIN_PALABRAS_CLAVE_GENERICA = 2
+ARCHIVOS_VINCULADOS = frozenset({"casos", "esperadas", "anotaciones"})
+# Hashes autorizados por id de conjunto. Su ausencia implica el rechazo de la excepción.
+SIN_AUTORIZACIONES: Mapping[str, Mapping[str, str]] = MappingProxyType({})
 
 
 class ErrorIntegridad(Exception):
@@ -51,6 +62,7 @@ class Descriptor:
     n_mensajes: int | None = None
     privado: bool = False
     todos_criticos: bool = True
+    excepciones_clave_generica: frozenset[str] = frozenset()  # casos; validados en el registro
 
 
 @dataclass(frozen=True)
@@ -219,7 +231,17 @@ def _solapan(a: tuple[str, ...], b: tuple[str, ...]) -> bool:
     return contiene(a, b) or contiene(b, a)
 
 
-def _validar_anotacion(dato: Any, caso: Caso, todos_criticos: bool) -> Anotacion:
+def _clave_generica(valor: Any, caso: str) -> tuple[str, ...]:
+    """Una sola clave de 2 o más palabras, todas de la lista genérica (las demás van en `claves`)."""
+    if not isinstance(valor, list) or not valor or not all(isinstance(p, str) for p in valor):
+        raise ErrorIntegridad("CLAVE_GENERICA_NO_AUTORIZADA", caso)
+    normalizada = palabras(" ".join(valor))
+    if len(normalizada) < MIN_PALABRAS_CLAVE_GENERICA or not all(p in GENERICAS for p in normalizada):
+        raise ErrorIntegridad("CLAVE_GENERICA_NO_AUTORIZADA", caso)
+    return normalizada
+
+
+def _validar_anotacion(dato: Any, caso: Caso, todos_criticos: bool, excepcion: bool = False) -> Anotacion:
     cid = caso.id
     permitidas = {"productos", "consultados", "texto_provisional", "critico", "justificacion_no_critico"}
     if not isinstance(dato, dict) or not set(dato) <= permitidas or not isinstance(dato.get("productos"), list):
@@ -233,16 +255,26 @@ def _validar_anotacion(dato: Any, caso: Caso, todos_criticos: bool) -> Anotacion
         if todos_criticos or not isinstance(justificacion, str) or not justificacion.strip():
             raise ErrorIntegridad("CRITICIDAD_INVALIDA", cid)
     esperados = skus_esperados(caso.esperado)
-    if len(dato["productos"]) != len(esperados):
+    if len(dato["productos"]) != len(esperados):  # antes de cualquier acceso por índice
         raise ErrorIntegridad("ANOTACION_INCOMPLETA", cid)
-    claves_productos = []
-    for producto in dato["productos"]:
-        if not isinstance(producto, dict) or set(producto) != {"claves"}:
+    n_lineas, pendientes = len(caso.esperado["lineas"]), caso.esperado["pendientes"]
+    claves_productos, con_generica = [], 0
+    for indice, producto in enumerate(dato["productos"]):
+        if not isinstance(producto, dict) or "claves" not in producto or not set(producto) <= {"claves", "clave_generica"}:
             raise ErrorIntegridad("ANOTACION_INVALIDA", cid)
-        claves = _claves(producto["claves"], cid)
+        claves = _claves(producto["claves"], cid)  # validación normal, sin excepciones
         if critico and not claves:
             raise ErrorIntegridad("PRODUCTO_SIN_CLAVE", cid)
+        if "clave_generica" in producto:
+            posicion = indice - n_lineas  # productos: líneas y luego pendientes
+            sin_opciones = 0 <= posicion < len(pendientes) and not pendientes[posicion]["opciones"]
+            if not excepcion or con_generica or not sin_opciones:
+                raise ErrorIntegridad("CLAVE_GENERICA_NO_AUTORIZADA", cid)
+            claves += (_clave_generica(producto["clave_generica"], cid),)
+            con_generica += 1
         claves_productos.append(claves)
+    if excepcion and not con_generica:
+        raise ErrorIntegridad("EXCEPCION_SIN_USO", cid)
     union_esperada = frozenset().union(*esperados) if esperados else frozenset()
     consultados, indices = [], set()
     for c in dato.get("consultados", []):
@@ -273,24 +305,52 @@ def _validar_anotacion(dato: Any, caso: Caso, todos_criticos: bool) -> Anotacion
     return Anotacion(tuple(claves_productos), tuple(consultados), provisional, critico)
 
 
-def _cargar_anotaciones(contenido: bytes, casos: tuple[Caso, ...], todos_criticos: bool) -> dict[str, Anotacion]:
+def _cargar_anotaciones(contenido: bytes, casos: tuple[Caso, ...], descriptor: Descriptor) -> dict[str, Anotacion]:
     documento = _cargar_json(contenido, "FORMATO_ANOTACIONES")
     if not isinstance(documento, dict) or not isinstance(documento.get("casos"), dict):
         raise ErrorIntegridad("FORMATO_ANOTACIONES")
     if set(documento["casos"]) != {c.id for c in casos}:
         raise ErrorIntegridad("ANOTACIONES_INCOMPLETAS")
-    return {c.id: _validar_anotacion(documento["casos"][c.id], c, todos_criticos) for c in casos}
+    excepciones = descriptor.excepciones_clave_generica
+    return {c.id: _validar_anotacion(documento["casos"][c.id], c, descriptor.todos_criticos, c.id in excepciones) for c in casos}
 
 
 # ====================================================================== carga verificada
 
 
-def cargar(descriptor: Descriptor, rutas: Mapping[str, Path]) -> Conjunto:
-    """Fase 1: hashes de todos los archivos, formato, recuentos, coherencia y anotaciones."""
+def excepcion_autorizada(id_: Any, rol: Any, privado: Any, sha256: Any, casos: Any, autorizados: Any) -> bool:
+    """Regla única de la excepción, usada por el registro y por `cargar()`: par autorizado (lo que
+    implica `id == "D39"`), `validacion_privada`, `privado is True` y los tres hashes del conjunto
+    idénticos a los autorizados para ese id. Sin autorización para el id, el resultado es False."""
+    vinculados = autorizados.get(id_) if isinstance(autorizados, Mapping) and isinstance(id_, str) else None
+    return (
+        isinstance(casos, frozenset) and bool(casos)
+        and all((id_, caso) in EXCEPCIONES_CLAVE_GENERICA for caso in casos)
+        and rol == "validacion_privada" and privado is True
+        and isinstance(sha256, Mapping) and isinstance(vinculados, Mapping)
+        and set(sha256) == ARCHIVOS_VINCULADOS and dict(sha256) == dict(vinculados)
+    )
+
+
+def _verificar_excepcion(descriptor: Descriptor, autorizados: Mapping[str, Mapping[str, str]]) -> None:
+    """Independiente del registro: aunque el descriptor se construya directamente, la excepción
+    exige la regla completa, incluido el vínculo con los hashes autorizados que recibe `cargar()`."""
+    d = descriptor
+    if d.excepciones_clave_generica and not excepcion_autorizada(d.id, d.rol, d.privado, d.sha256, d.excepciones_clave_generica, autorizados):
+        raise ErrorIntegridad("REGISTRO_INVALIDO")
+
+
+def cargar(descriptor: Descriptor, rutas: Mapping[str, Path], autorizados: Mapping[str, Mapping[str, str]] = SIN_AUTORIZACIONES) -> Conjunto:
+    """Fase 1: hashes de todos los archivos, formato, recuentos, coherencia y anotaciones.
+
+    `autorizados` solo se usa para la excepción de clave genérica: el descriptor debe coincidir con
+    ellos (antes de leer nada) y cada archivo con el descriptor (al leerlo), así que los archivos
+    quedan vinculados a la autorización. Sin `autorizados`, la excepción se rechaza."""
     if descriptor.rol not in ROLES or "casos" not in descriptor.sha256 or "anotaciones" not in descriptor.sha256:
         raise ErrorIntegridad("DESCRIPTOR_INVALIDO")
     if set(descriptor.sha256) - {"casos", "esperadas", "anotaciones"}:
         raise ErrorIntegridad("DESCRIPTOR_INVALIDO")
+    _verificar_excepcion(descriptor, autorizados)  # antes de leer ningún archivo
     contenidos = {}
     for nombre, hash_autorizado in descriptor.sha256.items():
         ruta = rutas.get(nombre)
@@ -307,10 +367,13 @@ def cargar(descriptor: Descriptor, rutas: Mapping[str, Path]) -> Conjunto:
         raise ErrorIntegridad("RECUENTO_MENSAJES")
     if "esperadas" in contenidos:
         _verificar_esperadas(contenidos["esperadas"], casos)
-    anotaciones = _cargar_anotaciones(contenidos["anotaciones"], casos, descriptor.todos_criticos)
+    if not descriptor.excepciones_clave_generica <= {c.id for c in casos}:  # los casos declarados existen
+        raise ErrorIntegridad("REGISTRO_INVALIDO")
+    anotaciones = _cargar_anotaciones(contenidos["anotaciones"], casos, descriptor)
     return Conjunto(descriptor, casos, anotaciones)
 
 
-def cargar_todos(pares: list[tuple[Descriptor, Mapping[str, Path]]]) -> list[Conjunto]:
+def cargar_todos(pares: list[tuple[Descriptor, Mapping[str, Path]]],
+                 autorizados: Mapping[str, Mapping[str, str]] = SIN_AUTORIZACIONES) -> list[Conjunto]:
     """Verifica todos los conjuntos antes de devolver ninguno (ninguna petición antes de esto)."""
-    return [cargar(d, r) for d, r in pares]
+    return [cargar(d, r, autorizados) for d, r in pares]
