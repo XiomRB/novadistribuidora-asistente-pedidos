@@ -71,7 +71,8 @@ class ServicioPedidos:
                 raise InterpreteNoDisponible("interpretación inválida") from None
         traza.anotar("interprete", resultado="ok", n_eventos=len(interpretacion.eventos), n_consultas=len(interpretacion.consultas),
                      n_instrucciones_rechazadas=len(interpretacion.instrucciones_rechazadas))
-        traza.guardar_contenido("interpretacion", interpretacion.model_dump(mode="json"))
+        if traza.capturando():  # solo si la política lo autorizó al abrir el registro (D-M1)
+            traza.guardar_contenido("interpretacion", interpretacion.model_dump(mode="json"))
         # 4. Motor (500 ante cualquier error).
         with traza.medir("motor"):
             try:

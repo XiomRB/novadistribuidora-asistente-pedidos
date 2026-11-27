@@ -7,19 +7,20 @@ Privacidad (D-M1):
 - Modo `metadatos` (por defecto): solo recuentos, estados, códigos, latencias, tokens, coste, modelo,
   variante y versión. Nunca mensajes, `cliente_id`, instrucciones, texto de pendientes, SKU,
   cantidades, importes, claves ni mensajes de error.
-- Modo `completo`: además la entrada y la interpretación, SOLO si (1) está configurado
-  explícitamente, (2) el almacén es local y (3) la solicitud declara un conjunto público
-  (`X-Evaluacion-Conjunto` y `X-Evaluacion-Privado: 0`) que no sea privado por código
-  (`CONJUNTOS_SOLO_METADATOS`, que incluye D39). Si falta cualquiera, metadatos.
+- Modo `completo`: además la entrada y la interpretación, SOLO si `contenido_permitido`
+  (`registro.py`) lo autoriza: configuración explícita, almacén local y un conjunto declarado público
+  que no esté en `CONJUNTOS_SOLO_METADATOS` (D39). La política se aplica al **capturar**
+  (`permite_contenido`, al abrir el registro): sin autorización el contenido nunca entra en el registro
+  ni en el búfer. Al exportar se comprueba otra vez, como defensa adicional.
 
-Disponibilidad: antes de importar MLflow se fijan timeout HTTP de 2 s, reintentos 0 y un reintento
-asíncrono acotado. El hilo de la solicitud **nunca** llama a MLflow: solo deja el registro en un búfer
-propia acotada (`MAX_PENDIENTES`) y un único hilo de fondo lo exporta. Si MLflow no está disponible o la
-búfer está lleno, la traza se descarta y se cuenta. Ningún error de aquí cambia la respuesta.
-`cerrar()` drena el búfer y vacía el de MLflow con un límite total de tiempo (`ESPERA_CIERRE_S`).
+Disponibilidad: antes de importar MLflow se fijan timeout HTTP de 2 s y 0 reintentos, y se desactiva
+el envío asíncrono de MLflow (agrupaba spans hasta 5 s y perdía trazas pendientes si el servidor caía).
+El hilo de la solicitud **nunca** llama a MLflow: solo deja el registro en un búfer propio acotado
+(`MAX_PENDIENTES`), y un único hilo propio de fondo (`exportar-trazas`) lo exporta de forma síncrona.
+Si MLflow no está disponible o el búfer está lleno, la traza se descarta y se cuenta. Ningún error de
+aquí cambia la respuesta. `cerrar()` drena el búfer con un límite total de tiempo (`ESPERA_CIERRE_S`).
 (En la demostración con Uvicorn, la primera exportación desde el hilo de la solicitud llegó a tardar
-unos 20 s: por eso la exportación no ocurre nunca en ese hilo. El envío asíncrono de MLflow se
-desactiva: agrupaba spans hasta 5 s y perdía trazas pendientes si el servidor caía.)
+unos 20 s: por eso la exportación no ocurre nunca en ese hilo.)
 """
 
 from __future__ import annotations
@@ -31,17 +32,17 @@ import threading
 import time
 from typing import Any
 
-from app.observabilidad.estado_mlflow import EstadoMlflow, uri_local
-from app.observabilidad.registro import Registro
+from app.observabilidad.estado_mlflow import EstadoMlflow
+from app.observabilidad.registro import CONJUNTOS_SOLO_METADATOS, Correlacion, Registro, contenido_permitido
 
-CONJUNTOS_SOLO_METADATOS = frozenset({"D39"})
+__all__ = ["CONJUNTOS_SOLO_METADATOS", "Trazador", "contenido_permitido"]
 ESPERA_CIERRE_S = 5.0
 MAX_PENDIENTES = 1000
 _AJUSTES_MLFLOW = {
     "MLFLOW_HTTP_REQUEST_TIMEOUT": "2",
     "MLFLOW_HTTP_REQUEST_MAX_RETRIES": "0",
-    "MLFLOW_ASYNC_TRACE_LOGGING_RETRY_TIMEOUT": "5",
-    # La exportación ya ocurre en el hilo propio de fondo: sin el envío asíncrono de MLflow, que agrupa spans
+    "MLFLOW_ASYNC_TRACE_LOGGING_RETRY_TIMEOUT": "5",  # solo aplicaría si se reactivara el envío asíncrono
+    # La exportación ocurre en el hilo propio de fondo: sin el envío asíncrono de MLflow, que agrupa spans
     # (hasta 5 o 5 s) y perdía trazas pendientes si el servidor caía antes de enviarlas.
     "MLFLOW_ENABLE_ASYNC_TRACE_LOGGING": "false",
     "MLFLOW_DISABLE_AGENT_HINT": "1",
@@ -61,14 +62,6 @@ def _mlflow() -> Any:
     import mlflow
 
     return mlflow
-
-
-def contenido_permitido(modo: str, uri: str | None, registro: Registro) -> bool:
-    c = registro.correlacion
-    return (
-        modo == "completo" and uri is not None and uri_local(uri)
-        and c.conjunto is not None and not c.privado and c.conjunto not in CONJUNTOS_SOLO_METADATOS
-    )
 
 
 class Trazador:
@@ -94,6 +87,10 @@ class Trazador:
         mlflow = _mlflow()
         mlflow.set_tracking_uri(self.estado.uri)
         self.experiment_id = mlflow.set_experiment(self.experimento).experiment_id
+
+    def permite_contenido(self, correlacion: Correlacion) -> bool:
+        """Se consulta al abrir el registro: decide si la solicitud puede capturar contenido."""
+        return contenido_permitido(self.modo, self.estado.uri, correlacion)
 
     def _descartar(self) -> None:
         with self._candado:
@@ -138,7 +135,7 @@ class Trazador:
 
     def _exportar(self, registro: Registro) -> None:
         mlflow = _mlflow()
-        completo = contenido_permitido(self.modo, self.estado.uri, registro)
+        completo = registro.captura_contenido and self.permite_contenido(registro.correlacion)  # defensa adicional
         etiquetas = {**registro.correlacion.etiquetas(), "modelo": self.modelo, "variante": self.variante, "version": self.version,
                      "contenido": "completo" if completo else "metadatos"}
         raiz = mlflow.start_span_no_context(
@@ -156,7 +153,11 @@ class Trazador:
         raiz.end(status="OK" if codigo == 200 else "ERROR", end_time_ns=registro.fin_ns)
 
     def cerrar(self) -> None:
-        """Drena los pendientes propios y vacía el de MLflow sin bloquear más de `ESPERA_CIERRE_S` en total."""
+        """Drena el búfer propio sin bloquear más de `ESPERA_CIERRE_S` en total.
+
+        Con el envío asíncrono de MLflow desactivado, `flush_trace_async_logging` no encuentra nada que
+        enviar; se conserva acotado por el mismo límite como salvaguarda.
+        """
         limite = time.monotonic() + ESPERA_CIERRE_S
         self._fin.set()
         if self._hilo is not None:

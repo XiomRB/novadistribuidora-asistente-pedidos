@@ -8,7 +8,7 @@
 - Hito 2: `observabilidad=(EstadoMlflow, Trazador)` inyectable. Por defecto se construye desde la
   configuración: el estado de MLflow se comprueba en un hilo de fondo (la API arranca sin esperar a
   MLflow) y `/health` combina las sondas del intérprete y de MLflow, independientes entre sí. Al
-  cerrar, se detiene la comprobación y se vacía las trazas pendientes con un límite de tiempo.
+  cerrar, se detiene la comprobación y se drena el búfer de trazas con un límite de tiempo.
 - Arranque (`lifespan`): `cargar_datos`; si faltan o son inválidos, **la aplicación no arranca**
   (D24) y el error solo informa códigos y archivos (nunca claves ni datos). Después,
   `Recursos.construir` una sola vez (D68).

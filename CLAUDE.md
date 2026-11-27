@@ -185,9 +185,12 @@ OPENROUTER_PRUEBA_REAL=1 .venv/bin/python -m pytest -q -m openrouter
     tokens, coste efectivo de OpenRouter (`None` si no se informa; nunca estimado), modelo, variante
     y versión; nunca mensajes, `cliente_id`, instrucciones, texto de pendientes, SKU, cantidades,
     importes, claves ni errores. Modo `completo` solo con almacén local, configuración explícita y un
-    conjunto público declarado; `CONJUNTOS_SOLO_METADATOS` (D39) lo impide en todos los casos. Timeout HTTP de
-    MLflow 2 s, reintentos 0, exportación asíncrona; con MLflow no disponible la traza se descarta;
-    el cierre vacía el búfer con un límite de tiempo.
+    conjunto público declarado; `CONJUNTOS_SOLO_METADATOS` (D39) lo impide en todos los casos. La
+    política (`contenido_permitido`, en `registro.py`) se aplica **al capturar**: sin autorización, el
+    contenido nunca entra en el `Registro` ni en el búfer; al exportar se comprueba otra vez. El hilo de
+    la solicitud solo encola en un búfer propio acotado; un único hilo propio exporta a MLflow (timeout
+    HTTP 2 s, reintentos 0, envío asíncrono de MLflow desactivado). Con MLflow no disponible o el búfer
+    lleno, la traza se descarta y se cuenta; el cierre drena el búfer con un límite de tiempo.
   - `estado_mlflow.py` (sin MLflow): hilo de fondo que comprueba el servidor; `/health` solo lee el
     estado: `mlflow_no_configurado`, `mlflow_no_disponible` u operativo, independiente del intérprete.
 - `evaluacion_mlflow/` (hito 2): `python -m evaluacion_mlflow --resumen <resumen_publico.json>`

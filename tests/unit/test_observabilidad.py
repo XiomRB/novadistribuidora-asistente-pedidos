@@ -37,11 +37,11 @@ def test_correlacion_solo_valores_seguros():
     ids=["metadatos", "completo_local", "completo_localhost", "completo_remoto", "sin_uri", "privado", "d39_mal_configurado", "d39"],
 )
 def test_contenido_solo_en_modo_completo_local_y_conjunto_publico(modo, uri, encabezados, permitido):
-    assert contenido_permitido(modo, uri, Registro(correlacion(**encabezados))) is permitido
+    assert contenido_permitido(modo, uri, correlacion(**encabezados)) is permitido
 
 
 def test_sin_encabezados_nunca_hay_contenido():
-    assert not contenido_permitido("completo", "sqlite:///x.db", Registro(Correlacion.desde_encabezados({})))
+    assert not contenido_permitido("completo", "sqlite:///x.db", Correlacion.desde_encabezados({}))
     assert "D39" in CONJUNTOS_SOLO_METADATOS
 
 
@@ -129,3 +129,17 @@ def test_pendientes_llenos_descarta_y_cuenta():
     assert trazador.descartadas >= 9
     bloqueo.set()
     trazador.cerrar()
+
+
+def test_guardar_contenido_sin_autorizacion_no_conserva_nada():
+    from app.observabilidad import registro as traza
+
+    with traza.abrir(correlacion()) as r:  # por defecto, sin captura
+        assert not traza.capturando()
+        traza.guardar_contenido("entrada", {"mensajes": ["zqxmarca"]})
+    assert r.contenido == {} and not r.captura_contenido
+    with traza.abrir(correlacion(), captura_contenido=True) as r:
+        assert traza.capturando()
+        traza.guardar_contenido("entrada", {"mensajes": ["zqxmarca"]})
+    assert r.contenido == {"entrada": {"mensajes": ["zqxmarca"]}}
+    assert not traza.capturando()  # fuera de una solicitud

@@ -78,7 +78,7 @@ def costes_de_ejecucion(metadatos: Mapping[str, Any], experimento_trazas: str, e
     limite = time.monotonic() + espera_s
     unicas: dict[tuple[str, str, str], Any] = {}
     while exp_id is not None:
-        for t in buscar(exp_id, filtro):  # registro asíncrono: se espera a que lleguen todas
+        for t in buscar(exp_id, filtro):  # la API exporta en segundo plano: se espera a que lleguen todas
             e = t.info.tags
             clave = (e.get(f"{ETIQUETA}.conjunto", ""), e.get(f"{ETIQUETA}.repeticion", ""), e.get(f"{ETIQUETA}.caso", ""))
             if e.get(f"{ETIQUETA}.ejecucion") == ejecucion and (clave[0], clave[1]) in esperadas(metadatos):

@@ -52,13 +52,17 @@ def _registrar(codigo: int, inicio: float, detalle: str = "") -> None:
 @router.post(RUTA_PEDIDOS)
 def interpretar_pedido(solicitud: SolicitudPedido, request: Request) -> JSONResponse:
     """Hito 2: cada solicitud deja una traza (si MLflow está disponible) sin cambiar la respuesta."""
-    with traza.abrir(traza.Correlacion.desde_encabezados(request.headers)) as registro:
+    trazador = getattr(request.app.state, "trazador", None)
+    correlacion = traza.Correlacion.desde_encabezados(request.headers)
+    # La política de contenido se aplica aquí, al capturar: sin autorización no se conserva nada (D-M1).
+    captura = trazador is not None and bool(trazador.permite_contenido(correlacion))
+    with traza.abrir(correlacion, captura_contenido=captura) as registro:
         respuesta = _atender(solicitud, request)
         traza.anotar("pedido", codigo_http=respuesta.status_code, n_mensajes=len(solicitud.mensajes),
                      longitud_mensajes=sum(len(m) for m in solicitud.mensajes))
-        traza.guardar_contenido("entrada", {"mensajes": list(solicitud.mensajes)})
+        if traza.capturando():
+            traza.guardar_contenido("entrada", {"mensajes": list(solicitud.mensajes)})
     registro.atributos["pedido"]["latencia_ms"] = round(((registro.fin_ns or registro.inicio_ns) - registro.inicio_ns) / 1_000_000)
-    trazador = getattr(request.app.state, "trazador", None)
     if trazador is not None:
         trazador.registrar(registro)
     return respuesta

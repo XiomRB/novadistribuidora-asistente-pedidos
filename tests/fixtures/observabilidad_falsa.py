@@ -38,6 +38,9 @@ class TrazadorFalso:
         self.registros = []
         self.cerrado = False
 
+    def permite_contenido(self, correlacion):
+        return False  # como el modo metadatos
+
     def registrar(self, registro):
         self.registros.append(registro)
 
