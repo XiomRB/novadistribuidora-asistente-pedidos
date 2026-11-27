@@ -170,7 +170,16 @@ DATA_DIR=datos .venv/bin/python -m app.main
   conjuntos autorizados llega en E2c-2.
   - Fase 1 (`conjuntos.py`): antes de cualquier petición verifica los SHA-256 de todos los archivos
     (casos, esperadas y anotaciones), el formato, los recuentos, la coherencia y las anotaciones;
-    cualquier fallo es `ErrorIntegridad` con un código fijo (código 2 y 0 peticiones).
+    cualquier fallo es `ErrorIntegridad` con un código fijo (código 2 y 0 peticiones). Los ids del
+    registro son únicos y sus entradas solo admiten los campos documentados.
+  - Excepción de clave genérica (revisión del PR #10): `EXCEPCIONES_CLAVE_GENERICA` admite solo el par
+    (`D39`, `U03`). La entrada del registro debe declararla, ser `validacion_privada` con `privado: true`
+    y tener sus tres hashes idénticos a los autorizados, cuya única fuente en producción será
+    `evaluacion/autorizados.json` (E2c-2); hasta entonces se rechaza en todos los casos. Nunca por `--registro`,
+    entorno ni CLI. `ejecutar()` obtiene la fuente una sola vez y la pasa explícitamente a
+    `leer_registro()` y a `cargar()`; las dos aplican la misma regla (`excepcion_autorizada`) y, sin
+    autorización, la rechazan. El literal de la clave vive solo en las anotaciones privadas; nunca en el
+    repositorio. No modifica `genericas.py`, G-0 ni la validación de las claves normales.
   - Comparación (`comparacion.py`): estado, total, fecha, líneas, sustituciones, pendientes (motivo y
     opciones) y motivos como multiconjuntos y `Decimal`; `mensaje_cliente` solo por contrato; texto
     de los pendientes y clasificación aparte (U10 provisional, fuera del denominador del texto).

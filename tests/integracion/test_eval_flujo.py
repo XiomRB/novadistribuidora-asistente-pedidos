@@ -10,6 +10,7 @@
 """
 
 import copy
+import hashlib
 import json
 from decimal import Decimal
 from pathlib import Path
@@ -228,3 +229,150 @@ def test_arbol_no_limpio_da_codigo_3_sin_pedir(tmp_path, app_referencia, datos_d
     cliente, llamadas = _cliente_contador()
     codigo, lineas = correr("e3", registro, entorno, datos_dir, tmp_path / "salida", cliente, verificar_arbol=True, raiz=tmp_path)  # no es un repositorio
     assert (codigo, lineas, llamadas) == (3, ["ARBOL_NO_LIMPIO"], [])
+
+
+# ====================================================================== EX-8: excepción de clave genérica, antes de pedir
+# Datos propios y autocontenidos: mensajes inventados, su interpretación y sus respuestas esperadas
+# escritas a mano. No reutiliza MENSAJES ni las respuestas de referencia de las otras pruebas.
+
+
+def _no_existe(texto):
+    return {"estado": "requiere_revision", "lineas": [], "total": Decimal("0.00"), "fecha_entrega": None, "sustituciones": [],
+            "pendientes": [{"motivo": "producto_no_existe", "texto": texto, "opciones": []}], "motivos_revision": ["producto_no_existe"]}
+
+
+# conjunto -> [(caso, mensaje, producto interpretado, claves, clave genérica)]
+EX8 = {
+    "PUB8": [("V01", "zqxpido zqxmerengue", "zqxmerengue", [["zqxmerengue"]], None),
+             ("V02", "zqxpido zqxturron", "zqxturron", [["zqxturron"]], None)],
+    "D39": [("U01", "zqxpido zqxalfajor", "zqxalfajor", [["zqxalfajor"]], None),
+            ("U02", "zqxpido zqxbizcocho", "zqxbizcocho", [["zqxbizcocho"]], None),
+            ("U03", "zqxpido seis sobres", "seis sobres", [["zqxsobre", "lacteo"]], ["seis", "sobres"])],
+}
+INTERPRETACION_EX8 = {m: p for casos in EX8.values() for _, m, p, _, _ in casos}
+
+
+@pytest.fixture(scope="module")
+def app_ex8(datos_dir):
+    from app.datos.carga import cargar_datos
+
+    def interpretar_ex8(entrada):
+        producto = INTERPRETACION_EX8[entrada.mensajes[0]]
+        return {"eventos": [ev(1, 0, "agregar", producto, producto=producto)], "consultas": [], "instrucciones_rechazadas": []}
+
+    return crear_app(datos=cargar_datos(datos_dir), interprete=InterpretePorFuncion(interpretar_ex8))
+
+
+def preparar_d39(tmp_path):
+    entradas, entorno, autorizados = [], {}, {}
+    for id_, rol, privado in (("PUB8", "validacion_publica", False), ("D39", "validacion_privada", True)):
+        casos, anot = [], {}
+        for cid, mensaje, producto, claves, generica in EX8[id_]:
+            esperado = _no_existe(producto)
+            casos.append({"id": cid, "tipo": "sintetico", "entrada": {"cliente_id": "K04", "fecha_hora": "2026-12-01T10:00", "mensajes": [mensaje]},
+                          "esperado": esperado})
+            anot[cid] = anotacion_json([claves])
+            if generica is not None:
+                assert esperado["lineas"] == [] and esperado["pendientes"][0]["opciones"] == []  # pendiente sin opciones
+                anot[cid]["productos"][0]["clave_generica"] = generica
+        esperadas = {"version": "sintetica", "casos": {c["id"]: {"esperado": c["esperado"]} for c in casos}}
+        d, rutas = escribir_conjunto(tmp_path / id_, casos, anot, esperadas=esperadas, rol=rol, id=id_, privado=privado)
+        for nombre, ruta in rutas.items():
+            entorno[f"EVAL_EX8_{id_}_{nombre.upper()}"] = str(ruta)
+        entrada = {"id": id_, "rol": rol, "n_casos": d.n_casos, "n_mensajes": d.n_mensajes, "privado": privado,
+                   "archivos": {k: {"sha256": v, "variable": f"EVAL_EX8_{id_}_{k.upper()}"} for k, v in d.sha256.items()}}
+        if id_ == "D39":
+            entrada["excepciones_clave_generica"] = ["U03"]
+            autorizados["D39"] = dict(d.sha256)
+        entradas.append(entrada)
+    registro = tmp_path / "registro.json"
+    registro.write_text(json.dumps(entradas), encoding="utf-8")
+    return registro, entorno, autorizados
+
+
+def correr_ex(registro, entorno, datos_dir, salida, cliente, autorizados):
+    lineas = []
+    codigo = ejecutar("e6", registro, "http://testserver", 5, salida, {**entorno, "DATA_DIR": str(datos_dir)}, cliente=cliente,
+                      raiz=RAIZ, verificar_arbol=False, salida_texto=lineas.append, _hashes_autorizados=autorizados)
+    return codigo, lineas
+
+
+def test_ex8_con_hashes_vinculados_se_evalua(tmp_path, app_ex8, datos_dir):
+    registro, entorno, autorizados = preparar_d39(tmp_path)
+    with TestClient(app_ex8, raise_server_exceptions=False) as tc:
+        cliente = ClienteEvaluacion(cliente=tc)
+        codigo, lineas = correr_ex(registro, entorno, datos_dir, tmp_path / "salida", cliente, autorizados)
+    privado, _ = leer(tmp_path / "salida")
+    assert codigo == 0 and cliente.peticiones == 3 * (len(EX8["PUB8"]) + len(EX8["D39"])) and "D39: APROBADO" in lineas
+    assert all(c["k3"] == 0 and c["correcto"] for repeticion in privado["conjuntos"]["D39"]["casos"] for c in repeticion)
+
+
+def _editar_registro(cambio):
+    def aplicar(registro, entorno, autorizados):
+        entradas = json.loads(registro.read_text())
+        cambio(entradas)
+        registro.write_text(json.dumps(entradas), encoding="utf-8")
+    return aplicar
+
+
+def _reescribir_anotaciones(cambio):
+    """Cambia las anotaciones de D39 y actualiza sus hashes en el registro y en los autorizados."""
+    def aplicar(registro, entorno, autorizados):
+        ruta = Path(entorno["EVAL_EX8_D39_ANOTACIONES"])
+        documento = json.loads(ruta.read_text())
+        cambio(documento["casos"])
+        ruta.write_text(json.dumps(documento), encoding="utf-8")
+        nuevo = hashlib.sha256(ruta.read_bytes()).hexdigest()
+        _editar_registro(lambda es: es[1]["archivos"]["anotaciones"].update(sha256=nuevo))(registro, entorno, autorizados)
+        autorizados["D39"]["anotaciones"] = nuevo
+    return aplicar
+
+
+@pytest.mark.parametrize(
+    ("romper", "codigo_esperado"),
+    [
+        (lambda registro, entorno, autorizados: autorizados.clear(), "REGISTRO_INVALIDO"),  # producción: sin hashes autorizados
+        (lambda registro, entorno, autorizados: autorizados["D39"].update(casos="0" * 64), "REGISTRO_INVALIDO"),
+        (_editar_registro(lambda es: es[0].update(id="D39")), "REGISTRO_INVALIDO"),
+        (_editar_registro(lambda es: es[0].update(id="")), "REGISTRO_INVALIDO"),
+        (_editar_registro(lambda es: es[0].update(id=7)), "REGISTRO_INVALIDO"),
+        (_editar_registro(lambda es: es[1].update(hashes_autorizados={})), "REGISTRO_INVALIDO"),
+        (_editar_registro(lambda es: es[1].update(excepciones_clave_generica=["U02"])), "REGISTRO_INVALIDO"),
+        (_editar_registro(lambda es: es[0].update(excepciones_clave_generica=["U03"])), "REGISTRO_INVALIDO"),
+        (lambda registro, entorno, autorizados: _alterar_byte(Path(entorno["EVAL_EX8_D39_ANOTACIONES"])), "HASH_DISTINTO"),
+        (lambda registro, entorno, autorizados: _alterar_byte(Path(entorno["EVAL_EX8_D39_ESPERADAS"])), "HASH_DISTINTO"),
+        (_reescribir_anotaciones(lambda casos: casos["U03"]["productos"][0].pop("clave_generica")), "EXCEPCION_SIN_USO"),
+        (_reescribir_anotaciones(lambda casos: casos["U01"]["productos"][0].update(clave_generica=["tres", "kilos"])), "CLAVE_GENERICA_NO_AUTORIZADA"),
+        (_reescribir_anotaciones(lambda casos: casos["U03"]["productos"][0].update(clave_generica=["kilos"])), "CLAVE_GENERICA_NO_AUTORIZADA"),
+        (_reescribir_anotaciones(lambda casos: casos["U03"]["productos"].append({"claves": [["zqxextra"]]})), "ANOTACION_INCOMPLETA"),
+    ],
+    ids=["sin_hashes", "hash_distinto_del_autorizado", "id_duplicado", "id_vacio", "id_no_texto", "campo_no_documentado",
+         "par_no_autorizado", "excepcion_en_conjunto_publico", "byte_en_anotaciones", "byte_en_esperadas", "excepcion_sin_uso",
+         "clave_generica_en_otro_caso", "clave_generica_de_una_palabra", "productos_de_mas"],
+)
+def test_ex8_fallos_de_la_excepcion_detienen_antes_de_pedir(tmp_path, app_ex8, datos_dir, romper, codigo_esperado):
+    registro, entorno, autorizados = preparar_d39(tmp_path)
+    romper(registro, entorno, autorizados)
+    cliente, llamadas = _cliente_contador()
+    codigo, lineas = correr_ex(registro, entorno, datos_dir, tmp_path / "salida", cliente, autorizados)
+    assert (codigo, lineas, llamadas) == (2, [codigo_esperado], []) and not (tmp_path / "salida").exists()
+
+
+def _alterar_byte(ruta):
+    contenido = bytearray(ruta.read_bytes())
+    contenido[len(contenido) // 2] ^= 1
+    ruta.write_bytes(bytes(contenido))
+
+
+def test_ex8_cli_sin_autorizacion_da_codigo_2_sin_crear_el_cliente(tmp_path, datos_dir, monkeypatch, capsys):
+    """`main()` real: la única fuente es la de producción (vacía hasta E2c-2); nada se inyecta."""
+    import evaluacion.__main__ as cli
+
+    registro, entorno, _ = preparar_d39(tmp_path)
+    for variable, valor in {**entorno, "DATA_DIR": str(datos_dir)}.items():
+        monkeypatch.setenv(variable, valor)
+    clientes = []
+    monkeypatch.setattr(cli, "ClienteEvaluacion", lambda *a, **k: clientes.append(1))  # ninguna petición posible
+    monkeypatch.setattr(cli, "_arbol_limpio", lambda raiz: True)
+    codigo = cli.main(["--modo", "e6", "--registro", str(registro), "--base-url", "http://127.0.0.1:9", "--salida-privada", str(tmp_path / "salida")])
+    assert (codigo, capsys.readouterr().out.split(), clientes) == (2, ["REGISTRO_INVALIDO"], []) and not (tmp_path / "salida").exists()

@@ -3,10 +3,15 @@
 Códigos de salida: 0 aprobado; 1 no aprobado; 2 integridad, formato, registro, datos o salida
 inválidos (antes de cualquier petición); 3 árbol de Git no limpio.
 
-Registro (JSON): lista de conjuntos con `id`, `rol`, `n_casos`, `n_mensajes` (opcional),
-`privado`, `todos_criticos` y `archivos` (`casos`, `anotaciones` y, opcional, `esperadas`), cada uno
-con `sha256` y una ubicación: `variable` (variable de entorno), `ruta` (relativa al repositorio) o
-`junto_a` + `nombre` (en la misma carpeta que otro archivo del conjunto).
+Registro (JSON): lista de conjuntos con `id` (único en todo el registro), `rol`, `n_casos`,
+`n_mensajes` (opcional), `privado`, `todos_criticos`, `excepciones_clave_generica` (opcional) y
+`archivos` (`casos`, `anotaciones` y, opcional, `esperadas`), cada uno con `sha256` y una ubicación:
+`variable` (variable de entorno), `ruta` (relativa al repositorio) o `junto_a` + `nombre` (en la
+misma carpeta que otro archivo del conjunto). Cualquier otro campo es `REGISTRO_INVALIDO`.
+
+Una excepción de clave genérica solo se acepta para un par de `EXCEPCIONES_CLAVE_GENERICA`, en un
+conjunto `validacion_privada` con `privado: true` y con sus tres hashes idénticos a los autorizados.
+Los hashes autorizados nunca salen del registro, del entorno ni de la línea de comandos.
 """
 
 from __future__ import annotations
@@ -25,11 +30,19 @@ from typing import Any
 from app.datos.carga import cargar_datos
 from evaluacion import VERSION, reporte
 from evaluacion.cliente import ClienteEvaluacion
-from evaluacion.conjuntos import Conjunto, Descriptor, ErrorIntegridad, cargar_todos
+from evaluacion.conjuntos import SIN_AUTORIZACIONES, Conjunto, Descriptor, ErrorIntegridad, cargar_todos, excepcion_autorizada
 from evaluacion.criticos import evaluar_caso
 
 RAIZ = Path(__file__).resolve().parents[1]
 ROLES_POR_MODO = {"e3": ("desarrollo", "ajuste"), "e6": ("validacion_publica", "validacion_privada")}
+CAMPOS_ENTRADA = {"id", "rol", "n_casos", "n_mensajes", "privado", "todos_criticos", "excepciones_clave_generica", "archivos"}
+
+
+def hashes_autorizados_produccion() -> Mapping[str, Mapping[str, str]]:
+    """Hashes autorizados de los conjuntos con excepción. Su única fuente en producción será
+    `evaluacion/autorizados.json` (E2c-2, versionado y revisado por PR). Hasta entonces no hay
+    ninguno y toda excepción se rechaza."""
+    return {}
 
 
 def _ruta(archivo: Mapping[str, Any], resueltas: Mapping[str, Path], entorno: Mapping[str, str], raiz: Path) -> Path:
@@ -45,22 +58,43 @@ def _ruta(archivo: Mapping[str, Any], resueltas: Mapping[str, Path], entorno: Ma
     raise ErrorIntegridad("REGISTRO_INVALIDO")
 
 
-def leer_registro(ruta: Path, modo: str, entorno: Mapping[str, str], raiz: Path) -> list[tuple[Descriptor, dict[str, Path]]]:
+def _excepciones(e: Mapping[str, Any], descriptor_id: str, rol: str, sha256: Mapping[str, str],
+                 autorizados: Mapping[str, Mapping[str, str]]) -> frozenset[str]:
+    valor = e.get("excepciones_clave_generica", [])
+    if not isinstance(valor, list) or not all(isinstance(c, str) for c in valor) or len(set(valor)) != len(valor):
+        raise ErrorIntegridad("REGISTRO_INVALIDO")
+    if valor and not excepcion_autorizada(descriptor_id, rol, e.get("privado"), sha256, frozenset(valor), autorizados):
+        raise ErrorIntegridad("REGISTRO_INVALIDO")
+    return frozenset(valor)
+
+
+def leer_registro(ruta: Path, modo: str, entorno: Mapping[str, str], raiz: Path,
+                  autorizados: Mapping[str, Mapping[str, str]] = SIN_AUTORIZACIONES) -> list[tuple[Descriptor, dict[str, Path]]]:
+    """`autorizados` lo recibe de `ejecutar()`; sin él, toda excepción declarada se rechaza."""
     try:
         entradas = json.loads(Path(ruta).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         raise ErrorIntegridad("REGISTRO_INVALIDO") from None
+    if not isinstance(entradas, list) or not all(isinstance(e, dict) and set(e) <= CAMPOS_ENTRADA for e in entradas):
+        raise ErrorIntegridad("REGISTRO_INVALIDO")
+    ids = [e.get("id") for e in entradas]
+    if not all(isinstance(i, str) and i.strip() for i in ids):  # primero: cada id es una cadena no vacía
+        raise ErrorIntegridad("REGISTRO_INVALIDO")
+    if len(set(ids)) != len(ids):  # después: unicidad global, en todos los roles y modos
+        raise ErrorIntegridad("REGISTRO_INVALIDO")
     pares = []
     for rol in ROLES_POR_MODO[modo]:
-        del_rol = [e for e in entradas if isinstance(e, dict) and e.get("rol") == rol] if isinstance(entradas, list) else []
+        del_rol = [e for e in entradas if e.get("rol") == rol]
         if len(del_rol) != 1:
             raise ErrorIntegridad("REGISTRO_INCOMPLETO")
         e = del_rol[0]
         try:
             archivos = e["archivos"]
+            sha256 = {k: v["sha256"] for k, v in archivos.items()}
             descriptor = Descriptor(
-                id=e["id"], rol=rol, sha256={k: v["sha256"] for k, v in archivos.items()}, n_casos=e["n_casos"],
+                id=e["id"], rol=rol, sha256=sha256, n_casos=e["n_casos"],
                 n_mensajes=e.get("n_mensajes"), privado=bool(e.get("privado", False)), todos_criticos=bool(e.get("todos_criticos", True)),
+                excepciones_clave_generica=_excepciones(e, e["id"], rol, sha256, autorizados),
             )
             resueltas: dict[str, Path] = {}
             for nombre in ("casos", "anotaciones", "esperadas"):
@@ -97,6 +131,7 @@ def _evaluar(conjunto: Conjunto, cliente: ClienteEvaluacion, datos) -> list:
 def ejecutar(
     modo: str, registro: Path, base_url: str, timeout: float, salida: Path, entorno: Mapping[str, str] | None = None,
     cliente: ClienteEvaluacion | None = None, raiz: Path = RAIZ, verificar_arbol: bool = True, salida_texto=None,
+    *, _hashes_autorizados: Mapping[str, Mapping[str, str]] | None = None,  # solo pruebas; `main()` nunca lo pasa
 ) -> int:
     entorno = os.environ if entorno is None else entorno
     imprimir = salida_texto or (lambda texto: print(texto))
@@ -105,7 +140,9 @@ def ejecutar(
         return 3
     # Fase 1: todo se verifica antes de crear el cliente o enviar cualquier petición.
     try:
-        conjuntos = cargar_todos(leer_registro(registro, modo, entorno, raiz))
+        # Única fuente en producción; la inyección es solo para las pruebas. Se pasa a las dos capas.
+        autorizados = hashes_autorizados_produccion() if _hashes_autorizados is None else _hashes_autorizados
+        conjuntos = cargar_todos(leer_registro(registro, modo, entorno, raiz, autorizados), autorizados)
         directorio_datos = Path(entorno.get("DATA_DIR", raiz / "datos"))
         try:
             datos = cargar_datos(directorio_datos)
