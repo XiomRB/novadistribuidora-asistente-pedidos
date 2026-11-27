@@ -2,7 +2,9 @@
 
 - `crear_app(configuracion=None, datos=None, interprete=None, sondas=())`: los datos, el intérprete
   y las sondas son inyectables (pruebas). Por defecto los datos se cargan de `DATA_DIR` al
-  arrancar y el intérprete es `InterpreteNoConfigurado` (D80: 503 hasta E3).
+  arrancar y el intérprete se construye desde la configuración (hito 1): `InterpreteLLM` con
+  OpenRouter si hay `OPENROUTER_API_KEY` y `LLM_MODELO`; si no, `InterpreteNoConfigurado` (503).
+- Los registradores de `httpx` y `openai` quedan en WARNING: nunca se registran solicitudes.
 - Arranque (`lifespan`): `cargar_datos`; si faltan o son inválidos, **la aplicación no arranca**
   (D24) y el error solo informa códigos y archivos (nunca claves ni datos). Después,
   `Recursos.construir` una sola vez (D68).
@@ -30,6 +32,7 @@ from app.datos.modelos import Datos
 from app.dominio.errores import DatosInvalidos
 from app.dominio.pedido import Recursos
 from app.interprete.base import Interprete, InterpreteNoConfigurado
+from app.interprete.llm import crear_interprete_openrouter
 from app.servicio import ServicioPedidos
 
 PUERTO = 8000
@@ -53,17 +56,25 @@ def cargar_datos_para_arranque(configuracion: Configuracion) -> Datos:
         raise ErrorArranque(mensaje) from None
 
 
+def construir_interprete(configuracion: Configuracion, datos: Datos) -> Interprete:
+    """`InterpreteLLM` con OpenRouter si la configuración está completa; si no, no configurado."""
+    if not configuracion.interprete_configurado:
+        return InterpreteNoConfigurado()
+    return crear_interprete_openrouter(configuracion, datos)
+
+
 def crear_app(
     configuracion: Configuracion | None = None,
     datos: Datos | None = None,
     interprete: Interprete | None = None,
     sondas: Sequence[Sonda] = (),
 ) -> FastAPI:
-    interprete_efectivo: Interprete = interprete if interprete is not None else InterpreteNoConfigurado()
-
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        datos_efectivos = datos if datos is not None else cargar_datos_para_arranque(configuracion or Configuracion.desde_entorno())
+        config = configuracion or Configuracion.desde_entorno()
+        datos_efectivos = datos if datos is not None else cargar_datos_para_arranque(config)
+        interprete_efectivo = interprete if interprete is not None else construir_interprete(config, datos_efectivos)
+        app.state.interprete = interprete_efectivo
         app.state.servicio = ServicioPedidos(datos_efectivos, Recursos.construir(datos_efectivos), interprete_efectivo)
         app.state.sondas = [sonda_interprete(interprete_efectivo), *sondas]
         yield
@@ -82,6 +93,8 @@ def ejecutar() -> None:
     import uvicorn
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    for nombre in ("httpx", "httpcore", "openai"):
+        logging.getLogger(nombre).setLevel(logging.WARNING)
     uvicorn.run(app, host=HOST, port=PUERTO, access_log=False)
 
 
