@@ -19,6 +19,8 @@ NUCLEO = ["app/datos", "app/dominio", "app/mensajes"]
 BORDE = ["app/api", "app/interprete", "app/servicio.py", "app/main.py", "app/config.py"]
 CAPAS_EXTERNAS = ("app.api", "app.servicio", "app.main", "app.interprete", "app.config")
 PROHIBIDOS_EN_E2 = {"langchain", "langchain_core", "langchain_openai", "openai", "mlflow"}
+LLM = {"langchain", "langchain_core", "langchain_openai", "openai"}
+UNICO_CON_LLM = "app/interprete/llm.py"  # hito 1: LangChain y OpenRouter solo aquí
 EVALUADOR = ["evaluacion"]
 SIN_FLOAT_EN_EVALUADOR = ["evaluacion/correspondencia.py", "evaluacion/criticos.py", "evaluacion/reporte.py", "evaluacion/comparacion.py", "evaluacion/conjuntos.py"]
 
@@ -48,7 +50,15 @@ def test_el_nucleo_no_importa_las_capas_externas(ruta):
 
 @pytest.mark.parametrize("ruta", _archivos(BORDE), ids=lambda p: str(p.relative_to(RAIZ)))
 def test_el_borde_no_importa_llm_ni_mlflow_en_e2(ruta):
-    assert not [n for n in _imports(ruta) if n.split(".")[0] in PROHIBIDOS_EN_E2]
+    """Hito 1: LangChain/OpenAI solo en `app/interprete/llm.py`; MLflow en ningún archivo del borde."""
+    prohibidos = {"mlflow"} if ruta.relative_to(RAIZ).as_posix() == UNICO_CON_LLM else PROHIBIDOS_EN_E2
+    assert not [n for n in _imports(ruta) if n.split(".")[0] in prohibidos]
+
+
+def test_langchain_solo_en_el_interprete_llm():
+    """En toda la aplicación, el único archivo que usa LangChain u OpenAI es el intérprete LLM."""
+    con_llm = sorted(p.relative_to(RAIZ).as_posix() for p in _archivos(["app"]) if any(n.split(".")[0] in LLM for n in _imports(p)))
+    assert con_llm == [UNICO_CON_LLM]
 
 
 def _usos_de_float(arbol):

@@ -3,4 +3,5 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "referencia: pruebas con los datos reales y los casos de desarrollo locales (se omiten si no están disponibles)",
+    "openrouter: prueba real con OpenRouter (coste por token; requiere OPENROUTER_PRUEBA_REAL=1; nunca en la CI)",
 ]

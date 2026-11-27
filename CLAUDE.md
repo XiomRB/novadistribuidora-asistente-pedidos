@@ -50,8 +50,11 @@ lenguaje y produce eventos con salida estructurada; un motor determinista calcul
 # Pruebas de referencia con datos reales locales (nunca versionados)
 DATA_DIR=datos EVAL_DEV_PATH=/ruta/a/mensajes_dev.jsonl .venv/bin/python -m pytest -q -m referencia
 
-# API (puerto 8000, sin access log). Hasta E3 los pedidos responden 503 y /health "degradado".
+# API (puerto 8000, sin access log). Sin OPENROUTER_API_KEY y LLM_MODELO los pedidos responden 503.
 DATA_DIR=datos .venv/bin/python -m app.main
+
+# Prueba real con OpenRouter (coste por token; lee la clave del entorno o de .env sin mostrarla)
+OPENROUTER_PRUEBA_REAL=1 .venv/bin/python -m pytest -q -m openrouter
 ```
 
 ## Estructura
@@ -145,14 +148,31 @@ DATA_DIR=datos .venv/bin/python -m app.main
 - `app/servicio.py` (E2b): cliente (404 sin llamar al intérprete) -> intérprete (503) ->
   `validar_interpretacion` (503 si es inválida) -> `procesar_pedido` (500 genérico ante cualquier
   error) -> `RespuestaPedido`. Nunca expone el `cliente_id` ni detalles internos.
-- `app/interprete/` (E2b): interfaz `Interprete` (`interpretar`, `estado`). En producción, hasta
-  E3, `InterpreteNoConfigurado` (D80): 503 y `/health` "degradado". Los intérpretes falsos y el de
-  referencia existen **solo en las pruebas** (`tests/fixtures/interprete_falso.py`,
-  `tests/referencia/test_api_dev.py`).
+- `app/interprete/` (E2b, hito 1): interfaz `Interprete` (`interpretar`, `estado`).
+  - `llm.py`: `InterpreteLLM` (LangChain + OpenRouter). Es el **único** archivo de `app/` que usa
+    LangChain u OpenAI (`test_capas.py`). `ChatOpenAI` con la URL de OpenRouter, `temperature=0`,
+    timeout y reintentos acotados (`LLM_TIMEOUT_S`, `LLM_REINTENTOS` <= 2) y salida estructurada
+    `Interpretacion` por llamada a función. Su salida pasa **en todos los casos** por `validar_interpretacion`
+    (D72): una salida inválida o con un índice de mensaje inexistente se rechaza completa (503, nunca
+    500 ni procesamiento parcial). Los errores no conservan el mensaje del proveedor ni la clave.
+  - `instrucciones.py`: variantes `base` y `catalogo` (nombres y alias del catálogo, sin precios).
+    Los mensajes van aparte, como datos delimitados (`<mensajes_cliente>`, con `<`/`>` escapados);
+    nunca el `cliente_id` ni la fecha. Las órdenes del cliente sobre precios, descuentos, crédito,
+    fechas o reglas van a `instrucciones_rechazadas` y no tienen efecto.
+  - Estados de `/health` (motivos fijos): `interprete_no_configurado` (falta clave o modelo; 503),
+    `conectividad_no_verificada` (sin invocación exitosa aún), `error_al_invocar_modelo` (la
+    última falló) y `ok` (la última produjo una interpretación válida; se recupera solo).
+    `/health` **nunca** llama al proveedor.
+  - Los intérpretes falsos y el de referencia existen **solo en las pruebas**
+    (`tests/fixtures/interprete_falso.py`, `tests/fixtures/modelo_falso.py`,
+    `tests/referencia/test_api_dev.py`). Prueba real opcional: `OPENROUTER_PRUEBA_REAL=1` con el
+    marcador `openrouter` (con coste; nunca en la CI).
 - `app/main.py` (E2b): `crear_app(configuracion, datos, interprete, sondas)`; carga los datos de
   `DATA_DIR` al arrancar y **no arranca** si faltan o son inválidos (D24; el error solo muestra
   códigos y archivos); `Recursos` una sola vez (D68); `ejecutar()` en el puerto 8000 sin access
-  log (D88). `X-Request-ID` queda para E4 (D84). `app/config.py`: `DATA_DIR`.
+  log (D88). `X-Request-ID` queda para E4 (D84). `app/config.py`: `DATA_DIR` y el intérprete
+  (`OPENROUTER_API_KEY`, `LLM_MODELO`, `LLM_TIMEOUT_S`, `LLM_REINTENTOS`, `LLM_INSTRUCCIONES`); la
+  clave nunca aparece en `repr`. El intérprete se construye en el arranque (`construir_interprete`).
 - Logs de la API: solo método, ruta, código, duración y estado del pedido (o el tipo de un error
   interno). Nunca el cuerpo, los mensajes, el `cliente_id` ni el texto de los pendientes.
 - `tests/unit/`, `tests/integracion/`: con datos sintéticos inventados (`tests/fixtures/`).

@@ -13,7 +13,7 @@ def test_produccion_en_e2_esta_degradada_por_el_interprete(cliente_con):
     with cliente_con() as cliente:
         respuesta = cliente.get("/health")
     assert respuesta.status_code == 200
-    assert respuesta.json() == {"estado": "degradado", "motivo": "intérprete no configurado"}
+    assert respuesta.json() == {"estado": "degradado", "motivo": "interprete_no_configurado"}
 
 
 def test_ok_con_un_interprete_disponible(cliente_con):
