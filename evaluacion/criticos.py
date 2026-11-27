@@ -52,6 +52,7 @@ class ResultadoCaso:
     clasificacion_coincide: bool | None = None
     texto_coincide: bool | None = None
     texto_provisional: bool = False
+    latencia_ms: int | None = None  # hito 2: medida por el cliente del evaluador
 
     @property
     def correcto(self) -> bool:

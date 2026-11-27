@@ -48,6 +48,9 @@ class Resumen:
     texto_denominador: int  # sin los casos con texto provisional
     texto_provisional_coincide: int
     texto_provisional_total: int
+    latencia_media_ms: int | None = None
+    latencia_p50_ms: int | None = None
+    latencia_p95_ms: int | None = None
 
     @property
     def exactitud(self) -> Fraction:
@@ -72,7 +75,22 @@ def resumir(resultados: Sequence[ResultadoCaso]) -> Resumen:
         texto_denominador=len(estables),
         texto_provisional_coincide=sum(bool(r.texto_coincide) for r in provisionales),
         texto_provisional_total=len(provisionales),
+        **_latencias([r.latencia_ms for r in resultados if r.latencia_ms is not None]),
     )
+
+
+def _percentil(ordenados: Sequence[int], p: int) -> int:
+    """Percentil por el método del rango más cercano (enteros, sin interpolación)."""
+    rango = max(1, -(-p * len(ordenados) // 100))
+    return ordenados[rango - 1]
+
+
+def _latencias(valores: Sequence[int]) -> dict[str, int | None]:
+    if not valores:
+        return {"latencia_media_ms": None, "latencia_p50_ms": None, "latencia_p95_ms": None}
+    ordenados = sorted(valores)
+    return {"latencia_media_ms": round(sum(ordenados) / len(ordenados)), "latencia_p50_ms": _percentil(ordenados, 50),
+            "latencia_p95_ms": _percentil(ordenados, 95)}
 
 
 def supera_umbral(correctos: int, casos: int) -> bool:

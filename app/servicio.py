@@ -22,6 +22,7 @@ from app.dominio.errores import ClienteNoEncontrado
 from app.dominio.limites import validar_interpretacion
 from app.dominio.pedido import Recursos, ResultadoPedido, procesar_pedido
 from app.interprete.base import Interprete, InterpreteNoDisponible
+from app.observabilidad import registro as traza
 
 
 class ErrorInterno(Exception):
@@ -50,23 +51,36 @@ class ServicioPedidos:
         #    cliente_id: la API nunca lo muestra ni lo registra.
         if entrada.cliente_id not in self.datos.clientes:
             raise ClienteNoEncontrado(entrada.cliente_id)
-        # 2. Intérprete (503).
-        try:
-            bruto = self.interprete.interpretar(entrada)
-        except InterpreteNoDisponible:
-            raise
-        except Exception:  # noqa: BLE001 - cualquier fallo del intérprete es un 503
-            raise InterpreteNoDisponible("el intérprete falló") from None
-        # 3. Interpretación (503 si es inválida), por el punto de entrada único (D72).
-        try:
-            interpretacion = validar_interpretacion(
-                bruto.model_dump() if hasattr(bruto, "model_dump") else bruto, len(entrada.mensajes)
-            )
-        except Exception:  # noqa: BLE001 - ValidationError, LimitesExcedidos u otro formato
-            raise InterpreteNoDisponible("interpretación inválida") from None
+        # 2. Intérprete (503). Hito 2: el tramo se mide para la traza (sin cambiar la lógica).
+        with traza.medir("interprete"):
+            try:
+                bruto = self.interprete.interpretar(entrada)
+            except InterpreteNoDisponible as error:
+                traza.anotar("interprete", resultado=str(error) or "no_disponible")
+                raise
+            except Exception:  # noqa: BLE001 - cualquier fallo del intérprete es un 503
+                traza.anotar("interprete", resultado="error_al_invocar_modelo")
+                raise InterpreteNoDisponible("el intérprete falló") from None
+            # 3. Interpretación (503 si es inválida), por el punto de entrada único (D72).
+            try:
+                interpretacion = validar_interpretacion(
+                    bruto.model_dump() if hasattr(bruto, "model_dump") else bruto, len(entrada.mensajes)
+                )
+            except Exception:  # noqa: BLE001 - ValidationError, LimitesExcedidos u otro formato
+                traza.anotar("interprete", resultado="interpretacion_invalida")
+                raise InterpreteNoDisponible("interpretación inválida") from None
+        traza.anotar("interprete", resultado="ok", n_eventos=len(interpretacion.eventos), n_consultas=len(interpretacion.consultas),
+                     n_instrucciones_rechazadas=len(interpretacion.instrucciones_rechazadas))
+        traza.guardar_contenido("interpretacion", interpretacion.model_dump(mode="json"))
         # 4. Motor (500 ante cualquier error).
-        try:
-            resultado = procesar_pedido(entrada, interpretacion, self.datos, recursos=self.recursos)
-            return Atencion(RespuestaPedido.desde_resultado(resultado), resultado)
-        except Exception as error:  # noqa: BLE001 - HistorialInconsistente, invariantes, etc.
-            raise ErrorInterno(type(error).__name__) from None
+        with traza.medir("motor"):
+            try:
+                resultado = procesar_pedido(entrada, interpretacion, self.datos, recursos=self.recursos)
+                atencion = Atencion(RespuestaPedido.desde_resultado(resultado), resultado)
+            except Exception as error:  # noqa: BLE001 - HistorialInconsistente, invariantes, etc.
+                traza.anotar("motor", error=type(error).__name__)
+                raise ErrorInterno(type(error).__name__) from None
+        r = atencion.respuesta
+        traza.anotar("motor", estado=r.estado, n_lineas=len(r.lineas), n_pendientes=len(r.pendientes),
+                     n_sustituciones=len(r.sustituciones), motivos_revision=",".join(sorted(str(m) for m in r.motivos_revision)))
+        return atencion

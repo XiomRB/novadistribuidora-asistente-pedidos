@@ -6,6 +6,9 @@
   defecto 30, de 1 a 120), `LLM_REINTENTOS` (por defecto 1, de 0 a 2) y `LLM_INSTRUCCIONES` (`base` o `catalogo`).
   Sin clave o sin modelo, el intérprete queda no configurado (503 y `/health` degradado).
   La clave nunca aparece en `repr` ni en mensajes de error.
+- MLflow (hito 2): `MLFLOW_TRACKING_URI` (sin ella: `mlflow_no_configurado`), `MLFLOW_EXPERIMENTO`
+  (por defecto `lab3-api`), `MLFLOW_TRAZAS_CONTENIDO` (`metadatos` por defecto o `completo`),
+  `MLFLOW_INTERVALO_S` (comprobación del servidor, 10 s) y `APP_VERSION` (etiqueta de las trazas).
 """
 
 from __future__ import annotations
@@ -46,6 +49,11 @@ class Configuracion:
     llm_timeout_s: int = TIMEOUT_POR_DEFECTO_S
     llm_reintentos: int = REINTENTOS_POR_DEFECTO
     llm_instrucciones: str = INSTRUCCIONES_POR_DEFECTO
+    mlflow_tracking_uri: str | None = None
+    mlflow_experimento: str = "lab3-api"
+    mlflow_trazas_contenido: str = "metadatos"
+    mlflow_intervalo_s: int = 10
+    version: str = "desconocida"
 
     @property
     def interprete_configurado(self) -> bool:
@@ -57,6 +65,9 @@ class Configuracion:
         instrucciones = (entorno.get("LLM_INSTRUCCIONES") or INSTRUCCIONES_POR_DEFECTO).strip()
         if instrucciones not in ("base", "catalogo"):
             raise ConfiguracionInvalida("LLM_INSTRUCCIONES debe ser 'base' o 'catalogo'")
+        contenido = (entorno.get("MLFLOW_TRAZAS_CONTENIDO") or "metadatos").strip()
+        if contenido not in ("metadatos", "completo"):
+            raise ConfiguracionInvalida("MLFLOW_TRAZAS_CONTENIDO debe ser 'metadatos' o 'completo'")
         return cls(
             dir_datos=Path(entorno.get("DATA_DIR") or DIR_DATOS_POR_DEFECTO),
             openrouter_api_key=(entorno.get("OPENROUTER_API_KEY") or "").strip(),
@@ -64,4 +75,9 @@ class Configuracion:
             llm_timeout_s=_entero(entorno, "LLM_TIMEOUT_S", TIMEOUT_POR_DEFECTO_S, 1, 120),
             llm_reintentos=_entero(entorno, "LLM_REINTENTOS", REINTENTOS_POR_DEFECTO, 0, MAX_REINTENTOS),
             llm_instrucciones=instrucciones,
+            mlflow_tracking_uri=(entorno.get("MLFLOW_TRACKING_URI") or "").strip() or None,
+            mlflow_experimento=(entorno.get("MLFLOW_EXPERIMENTO") or "lab3-api").strip(),
+            mlflow_trazas_contenido=contenido,
+            mlflow_intervalo_s=_entero(entorno, "MLFLOW_INTERVALO_S", 10, 1, 300),
+            version=(entorno.get("APP_VERSION") or "desconocida").strip(),
         )

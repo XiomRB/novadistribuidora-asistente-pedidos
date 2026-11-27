@@ -23,6 +23,7 @@ from app.datos.carga import cargar_datos
 from app.dominio.entrada import EntradaPedido
 from app.interprete.base import MOTIVO_NO_VERIFICADO
 from app.main import construir_interprete, crear_app
+from tests.fixtures.observabilidad_falsa import observabilidad_ok
 
 RAIZ = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.openrouter
@@ -70,7 +71,7 @@ def _fecha(datos, cliente, fecha_hora):  # politicas.md, sección 7
 def test_openrouter_real(contexto, capsys):
     config, datos, interprete = contexto
     latencias = {}
-    with TestClient(crear_app(datos=datos, interprete=interprete)) as cliente:
+    with TestClient(crear_app(datos=datos, interprete=interprete, observabilidad=observabilidad_ok())) as cliente:  # MLflow simulado
         assert cliente.get("/health").json() == {"estado": "degradado", "motivo": MOTIVO_NO_VERIFICADO}
         for nombre, (cid, fh, mensajes, esperadas) in CASOS.items():
             inicio = time.perf_counter()
