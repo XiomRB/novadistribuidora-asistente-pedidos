@@ -105,6 +105,13 @@ curl -s -X POST http://localhost:8000/v1/pedidos/interpretar \
     del código (el SHA de Git de la construcción).
   - Por defecto solo contiene metadatos: nunca mensajes, `cliente_id`, SKU, cantidades ni importes.
 - **Evaluaciones:** experimento `lab3-evaluaciones` (ver más abajo).
+- **Confirmación de las trazas:**
+  - La API comprueba en segundo plano que cada traza quedó guardada con sus tramos y etiquetas; nunca
+    la reenvía, para no duplicarla.
+  - Al detenerse registra un resumen: `docker compose logs api | grep "trazas al cerrar"`.
+  - `no_confirmadas` indica que la traza no se pudo confirmar a tiempo (por ejemplo, porque MLflow
+    acababa de arrancar), no necesariamente que se perdiera.
+  - Una evaluación con trazas faltantes informa `COSTES_INCOMPLETOS`.
 
 ### Si MLflow se detiene
 

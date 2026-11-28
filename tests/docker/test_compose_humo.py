@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -270,9 +271,26 @@ def test_servicios_sanos_y_mlflow_reflejado_en_health(pila):
     assert max(latencias) < 1.0  # /health nunca hace llamadas de red
 
 
+def avisos_exportador(pila) -> list[str]:
+    """Avisos propios del exportador (solo categorías y recuentos; nunca textos ni URL)."""
+    lineas = pila.compose("logs", "--no-color", "api", check=False).stdout.splitlines()
+    return [l.split("novadistribuidora.observabilidad:", 1)[-1].strip() for l in lineas if "traza no " in l]
+
+
+def resumen_al_cerrar(pila) -> dict[str, int]:
+    lineas = [l for l in pila.compose("logs", "--no-color", "api", check=False).stdout.splitlines() if "trazas al cerrar:" in l]
+    assert lineas, "la API no registró el resumen de trazas al cerrar"
+    return {k: int(v) for k, v in re.findall(r"(\w+)=(\d+)", lineas[-1])}
+
+
 def test_trazas_en_el_contenedor_con_sha_de_git_y_sin_contenido(pila):
-    trazas = pila.pedir_con_traza("humo-trazas")
-    assert trazas  # al menos una; una traza perdida por timeout se acepta en el diseño (hito 2, F)
+    # MLflow recién arrancado puede tardar en sus primeras escrituras: un pedido de calentamiento, no evaluado.
+    pila.pedir_con_traza("humo-calentamiento")
+    for caso in ("C0", "C1"):
+        assert pila.pedir("humo-trazas", caso)[0] == 503
+    trazas = pila.esperar_trazas("humo-trazas", 2, limite=60)
+    if len(trazas) != 2:
+        pytest.fail(f"{len(trazas)} de 2 trazas confirmadas; avisos del exportador: {avisos_exportador(pila)[-3:]}")
     for traza in trazas:
         assert traza.info.tags["version"] == sha_git() and traza.info.tags["contenido"] == "metadatos"
         assert traza.info.tags["modelo"] == "zqx/modelo-humo"
@@ -299,6 +317,12 @@ def test_persistencia_de_mlflow_tras_restart_y_down_up(pila):
     pila.compose("restart", "mlflow", timeout=120)
     pila.esperar_mlflow()
     assert {t.info.trace_id for t in pila.esperar_trazas("humo-trazas", len(antes))} == antes
+    # Cierre ordenado de la API: el resumen cumple el invariante y nada quedó como fallida.
+    pila.compose("stop", "api", timeout=120)
+    resumen = resumen_al_cerrar(pila)
+    categorias = ("exportadas", "incompletas", "no_confirmadas", "fallidas", "descartadas")
+    assert resumen["registradas"] == sum(resumen[c] for c in categorias), resumen
+    assert resumen["fallidas"] == 0 and resumen["exportadas"] >= 3, resumen  # 2 medidas y la de recuperación, como mínimo
     pila.compose("down", timeout=300)  # sin -v: el volumen se conserva
     volumenes = subprocess.run(["docker", "volume", "ls", "--format", "{{.Name}}"], capture_output=True, text=True).stdout.split()
     assert f"{pila.nombre}_mlflow_datos" in volumenes

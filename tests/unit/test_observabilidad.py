@@ -143,3 +143,235 @@ def test_guardar_contenido_sin_autorizacion_no_conserva_nada():
         traza.guardar_contenido("entrada", {"mensajes": ["zqxmarca"]})
     assert r.contenido == {"entrada": {"mensajes": ["zqxmarca"]}}
     assert not traza.capturando()  # fuera de una solicitud
+
+
+# --- Confirmación de la exportación (revisión del PR #14) -------------------------------------
+
+import logging  # noqa: E402
+import threading  # noqa: E402
+
+from app.observabilidad import trazas as modulo_trazas  # noqa: E402
+
+RAPIDO = (0.05, 0.1, 0.2)
+
+
+class ErrorMlflow(Exception):
+    def __init__(self, codigo, texto="zqx"):
+        super().__init__(texto)
+        self.error_code = codigo
+
+
+def traza_con(*nombres):
+    class Span:
+        def __init__(self, nombre):
+            self.name = nombre
+
+    class Datos:
+        spans = [Span(n) for n in nombres]
+
+    class Traza:
+        data = Datos()
+
+    return Traza()
+
+
+ENCONTRADA = traza_con("pedido")
+NO_EXISTE = ErrorMlflow("RESOURCE_DOES_NOT_EXIST")
+TIMEOUT = ErrorMlflow("INTERNAL_ERROR", "API request to http://mlflow:5000/api failed: timed out")
+
+
+class TrazadorPrueba(modulo_trazas.Trazador):
+    """Trazador real (búfer, hilos, contadores) con la exportación sustituida: devuelve un id por registro."""
+
+    def __init__(self, respuestas=(), lector=None, esperas=RAPIDO, exportar_s=0.0, **kwargs):
+        self.exportaciones, self.lecturas = [], []
+        self._respuestas = list(respuestas)
+        self._exportar_s = exportar_s
+        super().__init__(EstadoFalsoObs(), lector=lector or self._leer_falso, esperas=esperas, **kwargs)
+        self.experiment_id = "1"
+
+    def _exportar(self, registro):
+        time.sleep(self._exportar_s)
+        self.exportaciones.append(registro)
+        return f"tr-{len(self.exportaciones)}", frozenset({"pedido"})
+
+    def _leer_falso(self, trace_id):
+        self.lecturas.append(trace_id)
+        respuesta = self._respuestas.pop(0) if len(self._respuestas) > 1 else self._respuestas[0]
+        if isinstance(respuesta, BaseException):
+            raise respuesta
+        return respuesta
+
+
+def EstadoFalsoObs():
+    from tests.fixtures.observabilidad_falsa import EstadoFalso
+
+    return EstadoFalso()
+
+
+def esperar_fin(trazador, limite=5.0):
+    fin = time.monotonic() + limite
+    while time.monotonic() < fin and trazador.contadores()["en_curso"]:
+        time.sleep(0.02)
+
+
+def invariante(trazador):
+    c = trazador.contadores()
+    return c["registradas"] == sum(c[k] for k in modulo_trazas.CATEGORIAS) + c["en_curso"]
+
+
+@pytest.mark.parametrize(
+    ("respuestas", "categoria", "lecturas"),
+    [
+        ([NO_EXISTE, ENCONTRADA], "exportadas", 2),  # escritura tardía: confirmada en la 2.ª lectura
+        ([NO_EXISTE], "no_confirmadas", 3),  # no encontrada en las 3 lecturas: no prueba que no exista
+        ([NO_EXISTE, NO_EXISTE, TIMEOUT], "no_confirmadas", 3),  # indeterminada en la última
+        ([TIMEOUT], "no_confirmadas", 3),
+        ([traza_con("motor")], "incompletas", 3),  # encontrada sin el tramo raíz
+        ([ENCONTRADA], "exportadas", 1),
+    ],
+    ids=["tardia", "no_encontrada", "indeterminada_final", "timeout", "incompleta", "inmediata"],
+)
+def test_clasificacion_solo_por_lecturas_y_nunca_reexporta(respuestas, categoria, lecturas):
+    trazador = TrazadorPrueba(respuestas)
+    trazador.registrar(Registro(correlacion()))
+    esperar_fin(trazador)
+    c = trazador.contadores()
+    assert c[categoria] == 1 and sum(c[k] for k in modulo_trazas.CATEGORIAS) == 1
+    assert len(trazador.exportaciones) == 1  # nunca se reexporta
+    assert len(trazador.lecturas) == lecturas
+    trazador.cerrar()
+    assert invariante(trazador) and trazador.contadores()[categoria] == 1
+
+
+def test_lecturas_lentas_no_retrasan_solicitudes_ni_exportaciones():
+    liberar = threading.Event()
+
+    def lector_lento(trace_id):
+        liberar.wait(3)
+        return ENCONTRADA
+
+    trazador = TrazadorPrueba(lector=lector_lento, esperas=(0.0, 0.0, 0.0))
+    inicio = time.perf_counter()
+    for _ in range(5):
+        trazador.registrar(Registro(correlacion()))
+    assert time.perf_counter() - inicio < 0.05  # la solicitud solo encola
+    fin = time.monotonic() + 2
+    while time.monotonic() < fin and len(trazador.exportaciones) < 5:
+        time.sleep(0.01)
+    assert len(trazador.exportaciones) == 5  # exportadas mientras la primera lectura sigue bloqueada
+    assert trazador.contadores()["exportadas"] == 0
+    liberar.set()
+    esperar_fin(trazador)
+    assert trazador.contadores()["exportadas"] == 5
+    trazador.cerrar()
+
+
+def test_cierre_acotado_con_pendientes_cuenta_todo_y_nada_como_exportada():
+    trazador = TrazadorPrueba([ENCONTRADA], esperas=(30.0, 30.0, 30.0), exportar_s=0.4)
+    for _ in range(30):  # 30 x 0.4 s de exportación no caben en el cierre
+        trazador.registrar(Registro(correlacion()))
+    time.sleep(0.5)
+    inicio = time.monotonic()
+    trazador.cerrar()
+    assert time.monotonic() - inicio <= modulo_trazas.ESPERA_CIERRE_S + 0.3
+    c = trazador.contadores()
+    assert c["en_curso"] == 0 and invariante(trazador)
+    assert c["registradas"] == 30 and c["descartadas"] > 0 and c["no_confirmadas"] > 0
+    assert c["exportadas"] == len(trazador.lecturas)  # solo lo confirmado con una lectura al cerrar
+    trazador.registrar(Registro(correlacion()))  # después del cierre no se cuenta nada
+    assert trazador.contadores() == c
+
+
+def test_tras_el_cierre_una_actualizacion_tardia_se_ignora(monkeypatch):
+    monkeypatch.setattr(modulo_trazas, "ESPERA_CIERRE_S", 0.5)
+    liberar = threading.Event()
+
+    def lector_bloqueado(trace_id):
+        liberar.wait(5)
+        return ENCONTRADA
+
+    trazador = TrazadorPrueba(lector=lector_bloqueado, esperas=(0.0, 0.0, 0.0))
+    trazador.registrar(Registro(correlacion()))
+    time.sleep(0.2)  # la lectura está en curso
+    trazador.cerrar()
+    congelados = trazador.contadores()
+    assert congelados["no_confirmadas"] == 1 and congelados["exportadas"] == 0 and invariante(trazador)
+    liberar.set()
+    time.sleep(0.3)
+    assert trazador.contadores() == congelados  # la lectura tardía no la convierte en exportada
+
+
+def test_mlflow_no_disponible_durante_la_verificacion_no_lee_y_no_confirma():
+    trazador = TrazadorPrueba([ENCONTRADA], esperas=(0.2, 0.2, 0.2))
+    trazador.registrar(Registro(correlacion()))
+    time.sleep(0.05)
+    trazador.estado.poner(False)
+    esperar_fin(trazador)
+    assert trazador.contadores()["no_confirmadas"] == 1 and trazador.lecturas == []
+    trazador.cerrar()
+
+
+def test_excepcion_propia_es_fallida_y_el_aviso_no_expone_detalles(caplog):
+    class Falla(TrazadorPrueba):
+        def _exportar(self, registro):
+            raise RuntimeError("http://mlflow:5000/api zqxmarca K04 sk-or-zqxsecreto")
+
+    trazador = Falla([ENCONTRADA])
+    with caplog.at_level(logging.WARNING, logger="novadistribuidora.observabilidad"):
+        trazador.registrar(Registro(correlacion()))
+        esperar_fin(trazador)
+        trazador.cerrar()
+    assert trazador.contadores()["fallidas"] == 1 and invariante(trazador)
+    texto = caplog.text
+    assert "RuntimeError" in texto and "fallidas=1" in texto
+    for prohibido in ("http://", "mlflow:5000", "zqxmarca", "K04", "sk-or"):
+        assert prohibido not in texto
+
+
+def test_aviso_de_no_confirmada_sin_url_ni_detalles(caplog):
+    trazador = TrazadorPrueba([TIMEOUT])
+    with caplog.at_level(logging.WARNING, logger="novadistribuidora.observabilidad"):
+        trazador.registrar(Registro(correlacion()))
+        esperar_fin(trazador)
+    assert "traza no confirmada (indeterminada tras 3 lecturas)" in caplog.text and "no_confirmadas=1" in caplog.text
+    assert "http://" not in caplog.text and "timed out" not in caplog.text
+    trazador.cerrar()
+
+
+def test_filtro_solo_descarta_avisos_de_exportacion_de_mlflow():
+    modulo_trazas._mlflow()  # instala el filtro
+    exportador = logging.getLogger(modulo_trazas.LOGGER_EXPORTADOR_MLFLOW)
+    assert modulo_trazas.FILTRO_AVISOS_EXPORTACION in exportador.filters
+
+    def registro(nombre, mensaje, nivel=logging.WARNING):
+        return logging.LogRecord(nombre, nivel, __file__, 1, mensaje, None, None)
+
+    for prefijo in modulo_trazas.PREFIJOS_AVISOS_EXPORTACION:
+        assert not exportador.filter(registro(exportador.name, f"{prefijo}: API request to http://mlflow:5000 failed"))
+    assert exportador.filter(registro(exportador.name, "Current MLflow server does not support ingesting the span x"))
+    assert exportador.filter(registro(exportador.name, "No trace or trace info provided, unable to export"))
+    otro = logging.getLogger("mlflow.tracking.fluent")
+    assert modulo_trazas.FILTRO_AVISOS_EXPORTACION not in otro.filters  # el resto de MLflow no cambia
+
+
+def test_etiquetas_distintas_o_ausentes_es_incompleta():
+    class ConEtiquetas(TrazadorPrueba):
+        def _exportar(self, registro):
+            self.exportaciones.append(registro)
+            return "tr-1", frozenset({"pedido"}), {"evaluacion.ejecucion": "e1", "version": "v1"}
+
+    sin_etiquetas = traza_con("pedido")
+    sin_etiquetas.info = type("Info", (), {"tags": {"evaluacion.ejecucion": "e1"}})()  # falta la versión
+    trazador = ConEtiquetas([sin_etiquetas])
+    trazador.registrar(Registro(correlacion()))
+    esperar_fin(trazador)
+    assert trazador.contadores()["incompletas"] == 1 and trazador.contadores()["exportadas"] == 0
+    trazador.cerrar()
+    completa = traza_con("pedido")
+    completa.info = type("Info", (), {"tags": {"evaluacion.ejecucion": "e1", "version": "v1", "otra": "x"}})()
+    trazador = ConEtiquetas([completa])
+    trazador.registrar(Registro(correlacion()))
+    esperar_fin(trazador)
+    assert trazador.contadores()["exportadas"] == 1
+    trazador.cerrar()
