@@ -184,6 +184,18 @@ class Pila:
         raise AssertionError("MLflow no respondió")
 
 
+@pytest.fixture(autouse=True)
+def _aislar_uri_de_mlflow():
+    """`mlflow.set_tracking_uri()` (consultas desde el equipo) escribe MLFLOW_TRACKING_URI en el entorno del
+    proceso de pytest: se restaura al terminar cada prueba para no afectar a otras."""
+    original = os.environ.get("MLFLOW_TRACKING_URI")
+    yield
+    if original is None:
+        os.environ.pop("MLFLOW_TRACKING_URI", None)
+    else:
+        os.environ["MLFLOW_TRACKING_URI"] = original
+
+
 @pytest.fixture(scope="module")
 def base():
     carpeta = Path(tempfile.mkdtemp(prefix="lab3humo-"))

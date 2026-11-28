@@ -375,3 +375,58 @@ def test_etiquetas_distintas_o_ausentes_es_incompleta():
     esperar_fin(trazador)
     assert trazador.contadores()["exportadas"] == 1
     trazador.cerrar()
+
+
+class RelojSimulado:
+    """Reloj del calendario de lecturas, controlado por la prueba (sin esperas reales largas)."""
+
+    def __init__(self, inicio=100.0):
+        self.ahora = inicio
+        self._candado = threading.Lock()
+
+    def __call__(self):
+        with self._candado:
+            return self.ahora
+
+    def poner(self, valor):
+        with self._candado:
+            self.ahora = valor
+
+
+def _esperar(condicion, limite=2.0):
+    fin = time.monotonic() + limite
+    while time.monotonic() < fin and not condicion():
+        time.sleep(0.01)
+    return condicion()
+
+
+def _vencimientos(trazador):
+    with trazador._candado:
+        return [v[0] for v in trazador._verificaciones]
+
+
+def test_calendario_absoluto_lecturas_a_1_3_y_7_s_desde_la_exportacion():
+    """Cada lectura vence en exportación + 1, + 3 y + 7 s, aunque una lectura tarde (no son intervalos)."""
+    reloj = RelojSimulado(100.0)
+    instantes = []
+
+    def lector_lento(trace_id):  # cada lectura consume 1,5 s del reloj simulado
+        instantes.append(reloj())
+        reloj.poner(reloj() + 1.5)
+        raise NO_EXISTE
+
+    trazador = TrazadorPrueba(lector=lector_lento, esperas=modulo_trazas.ESPERAS_VERIFICACION_S, reloj=reloj)
+    trazador.registrar(Registro(correlacion()))  # la exportación termina con el reloj en 100,0
+    assert _esperar(lambda: _vencimientos(trazador) == [101.0])
+    reloj.poner(100.9)
+    time.sleep(0.3)
+    assert instantes == []  # ninguna lectura antes de su vencimiento
+    reloj.poner(101.0)
+    assert _esperar(lambda: _vencimientos(trazador) == [103.0])  # 100 + 3, no 102,5 + 3
+    reloj.poner(103.0)
+    assert _esperar(lambda: _vencimientos(trazador) == [107.0])  # 100 + 7, no 104,5 + 7
+    reloj.poner(107.0)
+    assert _esperar(lambda: trazador.contadores()["no_confirmadas"] == 1)
+    assert instantes == [101.0, 103.0, 107.0] and len(trazador.exportaciones) == 1  # 3 lecturas, sin reexportar
+    trazador.cerrar()
+    assert invariante(trazador)

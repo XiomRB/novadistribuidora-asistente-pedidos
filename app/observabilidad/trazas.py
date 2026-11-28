@@ -24,7 +24,8 @@ unos 20 s: por eso la exportación no ocurre nunca en ese hilo.)
 Confirmación (revisión del PR #14): el exportador de MLflow captura sus propios errores (`start_trace`
 solo emite un aviso y `log_spans` lo registra en DEBUG), así que una traza puede perderse sin
 excepción. Por eso cada traza exportada se **lee** con la API pública (`MlflowClient.get_trace`) a
-+1, +3 y +7 s (`ESPERAS_VERIFICACION_S`); **nunca se reexporta**, porque la API pública no permite
++1, +3 y +7 s contados desde la exportación (`ESPERAS_VERIFICACION_S`, calendario absoluto, no
+intervalos entre lecturas); **nunca se reexporta**, porque la API pública no permite
 reenviar con el mismo `trace_id` y un reenvío podría duplicarla. Cada registro cuenta en una sola
 categoría:
 
@@ -65,7 +66,7 @@ __all__ = ["CONJUNTOS_SOLO_METADATOS", "Trazador", "contenido_permitido"]
 ESPERA_CIERRE_S = 5.0
 MAX_PENDIENTES = 1000
 MAX_VERIFICACIONES = 1000
-ESPERAS_VERIFICACION_S = (1.0, 3.0, 7.0)  # lecturas a +1, +3 y +7 s de la exportación
+ESPERAS_VERIFICACION_S = (1.0, 3.0, 7.0)  # instantes de lectura desde la exportación (absolutos)
 CATEGORIAS = ("exportadas", "incompletas", "no_confirmadas", "fallidas", "descartadas")
 # Avisos de exportación de MLflow que interpolan la excepción (URL interna y detalles): se filtran.
 PREFIJOS_AVISOS_EXPORTACION = (
@@ -135,7 +136,7 @@ def leer_traza_mlflow(uri: str | None) -> Callable[[str], Any]:
 class Trazador:
     def __init__(self, estado: EstadoMlflow, experimento: str = "lab3-api", modo: str = "metadatos", version: str = "desconocida",
                  modelo: str = "", variante: str = "", lector: Callable[[str], Any] | None = None,
-                 esperas: tuple[float, ...] = ESPERAS_VERIFICACION_S):
+                 esperas: tuple[float, ...] = ESPERAS_VERIFICACION_S, reloj: Callable[[], float] = time.monotonic):
         self.estado = estado
         self.experimento = experimento
         self.modo = modo
@@ -144,6 +145,7 @@ class Trazador:
         self.variante = variante
         self.experiment_id: str | None = None
         self.esperas = tuple(esperas)
+        self._reloj = reloj  # calendario de lecturas (inyectable en pruebas); el cierre usa el reloj real
         self._lector = lector
         self.registradas = 0
         self.exportadas = self.incompletas = self.no_confirmadas = self.fallidas = self.descartadas = 0
@@ -151,7 +153,7 @@ class Trazador:
         self._aviso = threading.Condition(self._candado)
         self._pendientes: deque[Registro] = deque()
         self._exportando = 0
-        self._verificaciones: list[tuple[float, int, str, tuple, int]] = []  # (vence, orden, id, esperado, lecturas)
+        self._verificaciones: list[tuple[float, int, str, tuple, int, float]] = []  # (vence, orden, id, esperado, lecturas, origen)
         self._verificando = 0
         self._orden = itertools.count()
         self._congelado = False
@@ -244,16 +246,17 @@ class Trazador:
                     self._sumar("no_confirmadas")  # sin identificador no hay forma de confirmarla
                 else:
                     esperado = (frozenset(resultado[1]), frozenset(resultado[2].items()) if len(resultado) > 2 else frozenset())
-                    self._programar(resultado[0], esperado, 0)
+                    self._programar(resultado[0], esperado, 0, self._reloj())  # origen: fin de la exportación
 
-    def _programar(self, trace_id: str, esperado: tuple, lecturas: int) -> None:  # con el candado tomado
+    def _programar(self, trace_id: str, esperado: tuple, lecturas: int, origen: float) -> None:  # con el candado tomado
+        """Lectura número `lecturas` en `origen + esperas[lecturas]`, contada desde la exportación."""
         if self._congelado:
             return
         if len(self._verificaciones) >= MAX_VERIFICACIONES:
             self._sumar("no_confirmadas")
             return
-        espera = self.esperas[lecturas] if lecturas < len(self.esperas) else 0.0
-        heapq.heappush(self._verificaciones, (time.monotonic() + espera, next(self._orden), trace_id, esperado, lecturas))
+        desplazamiento = self.esperas[lecturas] if lecturas < len(self.esperas) else 0.0
+        heapq.heappush(self._verificaciones, (origen + desplazamiento, next(self._orden), trace_id, esperado, lecturas, origen))
         if self._hilo_verificador is None:
             self._hilo_verificador = threading.Thread(target=self._verificador, name="verificar-trazas", daemon=True)
             self._hilo_verificador.start()
@@ -307,11 +310,11 @@ class Trazador:
                     if self._congelado or self._vencido() or (self._fin.is_set() and not self._verificaciones
                                                              and not self._pendientes and not self._exportando):
                         return
-                    if self._verificaciones and (self._fin.is_set() or self._verificaciones[0][0] <= time.monotonic()):
+                    if self._verificaciones and (self._fin.is_set() or self._verificaciones[0][0] <= self._reloj()):
                         break  # al cerrar, una lectura inmediata por traza, sin esperas
-                    espera = self._verificaciones[0][0] - time.monotonic() if self._verificaciones else 0.2
+                    espera = self._verificaciones[0][0] - self._reloj() if self._verificaciones else 0.2
                     self._aviso.wait(timeout=max(0.01, min(espera, 0.2)))
-                _, _, trace_id, esperado, lecturas = heapq.heappop(self._verificaciones)
+                _, _, trace_id, esperado, lecturas, origen = heapq.heappop(self._verificaciones)
                 self._verificando += 1
                 cerrando = self._fin.is_set()
             resultado = self._leer(trace_id, esperado)
@@ -322,7 +325,7 @@ class Trazador:
                 if resultado == "exportada":
                     self._sumar("exportadas")
                 elif lecturas + 1 < len(self.esperas) and not cerrando:
-                    self._programar(trace_id, esperado, lecturas + 1)
+                    self._programar(trace_id, esperado, lecturas + 1, origen)
                 else:
                     categoria = "incompletas" if resultado == "incompleta" else "no_confirmadas"
                     self._sumar(categoria)

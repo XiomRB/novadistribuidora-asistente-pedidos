@@ -11,6 +11,7 @@
 """
 
 import json
+import os
 import logging
 import statistics
 import threading
@@ -47,6 +48,19 @@ def con_uso(coste=0.00025):
     from app.dominio.esquema_eventos import Interpretacion
 
     return {"raw": Crudo(coste), "parsed": Interpretacion.validar({"eventos": [EVENTO]}, 1), "parsing_error": None}
+
+
+@pytest.fixture(autouse=True)
+def _aislar_uri_de_mlflow():
+    """`mlflow.set_tracking_uri()` escribe MLFLOW_TRACKING_URI en el entorno del proceso: sin esto, la URI
+    temporal se filtraría a las pruebas siguientes (p. ej., a las de referencia, que leen la configuración).
+    Restauración explícita: `monkeypatch.delenv(raising=False)` no deshace nada si la variable no existía."""
+    original = os.environ.get("MLFLOW_TRACKING_URI")
+    yield
+    if original is None:
+        os.environ.pop("MLFLOW_TRACKING_URI", None)
+    else:
+        os.environ["MLFLOW_TRACKING_URI"] = original
 
 
 @pytest.fixture(scope="module")

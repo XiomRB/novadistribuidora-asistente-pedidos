@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 
 from app.datos.normalizacion import normalizar_texto
 from app.main import crear_app
+from tests.fixtures.observabilidad_falsa import observabilidad_ok
 from tests.referencia.formato_eventos_dev import cargar, reconstruir
 from tests.referencia.test_consultas_qn1 import CONSULTAS, PEDIDOS
 
@@ -54,7 +55,7 @@ def _normalizado(cuerpo):
 
 def test_los_84_casos_por_http(casos_dev, datos_reales):
     discrepancias, latencias = {}, []
-    with TestClient(crear_app(datos=datos_reales, interprete=InterpreteReferencia(casos_dev))) as cliente:
+    with TestClient(crear_app(datos=datos_reales, interprete=InterpreteReferencia(casos_dev), observabilidad=observabilidad_ok())) as cliente:  # MLflow simulado
         assert cliente.get("/health").json() == {"estado": "ok"}
         for caso in casos_dev:
             inicio = time.perf_counter()

@@ -199,8 +199,9 @@ DOCKER_PRUEBAS=1 .venv/bin/python -m pytest -q -m docker tests/docker
     lleno, la traza se descarta y se cuenta; el cierre drena el búfer con un límite de tiempo.
   - Confirmación (revisión del PR #14): el exportador de MLflow se traga sus errores (`start_trace`
     solo avisa; `log_spans` en DEBUG). Un hilo `verificar-trazas` lee cada traza con la API pública
-    `MlflowClient.get_trace` a +1, +3 y +7 s y exige sus tramos **y** sus etiquetas (si solo
-    `log_spans` llega, el almacén crea la traza sin etiquetas). **Nunca se reexporta** (la API pública
+    `MlflowClient.get_trace` a +1, +3 y +7 s desde la exportación (instantes absolutos, no
+    intervalos) y exige sus tramos **y** sus etiquetas (si solo `log_spans` llega, el almacén crea la
+    traza sin etiquetas). **Nunca se reexporta** (la API pública
     no permite el mismo `trace_id`; un reenvío duplicaría). Categorías sin doble conteo: `exportadas`,
     `incompletas`, `no_confirmadas` (no confirmada en la ventana; **no** implica que no se guardó),
     `fallidas` (excepción propia) y `descartadas`; `registradas` = su suma + en curso. El cierre
