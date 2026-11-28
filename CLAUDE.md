@@ -55,6 +55,12 @@ DATA_DIR=datos .venv/bin/python -m app.main
 
 # Prueba real con OpenRouter (coste por token; lee la clave del entorno o de .env sin mostrarla)
 OPENROUTER_PRUEBA_REAL=1 .venv/bin/python -m pytest -q -m openrouter
+
+# API y MLflow en contenedores (hito 3; requiere .env y datos/ con los cinco parquet)
+docker compose up -d --build
+
+# Humo con Docker Compose: contenedores reales, datos sintéticos, sin clave, proyecto y puertos propios
+DOCKER_PRUEBAS=1 .venv/bin/python -m pytest -q -m docker tests/docker
 ```
 
 ## Estructura
@@ -198,6 +204,22 @@ OPENROUTER_PRUEBA_REAL=1 .venv/bin/python -m pytest -q -m openrouter
   y suma tokens y coste solo con las trazas de esa ejecución (`evaluacion.ejecucion`). Si faltan
   trazas o algún coste, `costes_completos=false` y no hay total. `evaluacion/` no usa MLflow
   (`test_capas.py`); el evaluador envía la correlación y mide la latencia de cada petición.
+- Contenedores (hito 3): `Dockerfile`, `compose.yaml`, `.dockerignore`, `docker/version_git.py`.
+  - Imagen de la API: `python:3.12-slim` fijada por digest; `requirements.txt` con `--no-deps` y
+    `pip check`; solo `COPY app/`; usuario 10001; sin `# syntax=` (frontend integrado de BuildKit).
+    `.dockerignore` es una lista blanca: nunca datos, `.env`, pruebas, evaluador ni material del curso.
+  - Versión (D-H4): el SHA de Git se lee de `.git/HEAD`, `.git/refs/` y `.git/packed-refs` con un
+    montaje temporal durante la construcción (`/app/VERSION`); `.git` no entra en la imagen. Sin
+    repositorio, `unknown`. Un `APP_VERSION` no vacío en el entorno prevalece.
+  - Compose: `api` (credenciales por `env_file` en tiempo de ejecución, datos montados `:ro`,
+    `DATA_DIR` y `MLFLOW_TRACKING_URI` fijados en `environment`) y `mlflow` (imagen oficial v3.18.0
+    fijada por digest, la misma versión que el cliente; sqlite y artefactos en el volumen
+    `mlflow_datos`; solo en `127.0.0.1`; `--allowed-hosts`). La API depende de MLflow con
+    `service_started` y `required: false`: **nunca** `service_healthy` (D-M3).
+  - Sin datos, la API no arranca (D24) y Docker la reinicia con espera creciente; se recupera sola
+    al colocarlos (probado en `tests/docker`).
+  - `tests/integracion/test_contenedores.py` valida los archivos sin Docker (CI). `tests/docker/`
+    (marcador `docker`, `DOCKER_PRUEBAS=1`) levanta la pila real; corre en el trabajo `docker` de la CI.
 - `tests/unit/`, `tests/integracion/`: con datos sintéticos inventados (`tests/fixtures/`).
 - `tests/referencia/`: con datos reales y casos de desarrollo locales (marcador `referencia`).
   Los resultados esperados se leen siempre desde `EVAL_DEV_PATH`; nunca se copian al repositorio.

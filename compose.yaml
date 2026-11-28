@@ -1,0 +1,63 @@
+# Hito 3: la API y MLflow con `docker compose up -d --build` (ver README.md).
+# Credenciales: solo en `.env` (no versionado), inyectado en tiempo de ejecución. Datos: `./datos`
+# del equipo, montado en solo lectura. Nada de eso entra en la imagen.
+name: novadistribuidora
+
+services:
+  api:
+    build:
+      context: .
+    image: ${API_IMAGEN:-novadistribuidora-api:local}
+    env_file:
+      - path: ${API_ENV_FILE:-.env}
+        required: true
+    environment:
+      # Propios del contenedor: prevalecen sobre `.env`.
+      DATA_DIR: /app/datos
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    volumes:
+      - ${DATOS_HOST:-./datos}:/app/datos:ro
+    ports:
+      - "${API_PUERTO:-8000}:8000"
+    depends_on:
+      mlflow:
+        # La API nunca espera a que MLflow esté sano: arranca y responde aunque MLflow falle o
+        # tarde; /health informa mlflow_no_disponible mientras tanto (D-M3).
+        condition: service_started
+        required: false
+    restart: unless-stopped
+    networks: [lab3]
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.18.0@sha256:257204c77980b0f3450a26eb6089e487603fcdd4509529eadaf88f90669f5c13
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --workers=1
+      - --backend-store-uri=sqlite:////mlflow/mlflow.db
+      - --serve-artifacts
+      - --artifacts-destination=/mlflow/artefactos
+      # Encabezados Host aceptados: la API (red interna), el healthcheck y el equipo (puerto publicado).
+      - --allowed-hosts=mlflow:5000,localhost:5000,127.0.0.1:5000,localhost:${MLFLOW_PUERTO:-5000},127.0.0.1:${MLFLOW_PUERTO:-5000}
+    environment:
+      MLFLOW_DISABLE_AGENT_HINT: "1"
+    volumes:
+      - mlflow_datos:/mlflow
+    ports:
+      - "127.0.0.1:${MLFLOW_PUERTO:-5000}:5000"  # solo desde este equipo (D-H3)
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=4).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
+    restart: unless-stopped
+    networks: [lab3]
+
+volumes:
+  mlflow_datos:  # trazas, runs y artefactos: sobreviven a restart, stop y down (no a down -v)
+
+networks:
+  lab3:
