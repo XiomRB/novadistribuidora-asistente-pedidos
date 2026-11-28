@@ -55,6 +55,12 @@ DATA_DIR=datos .venv/bin/python -m app.main
 
 # Prueba real con OpenRouter (coste por token; lee la clave del entorno o de .env sin mostrarla)
 OPENROUTER_PRUEBA_REAL=1 .venv/bin/python -m pytest -q -m openrouter
+
+# API y MLflow en contenedores (hito 3; requiere .env y datos/ con los cinco parquet)
+docker compose up -d --build
+
+# Humo con Docker Compose: contenedores reales, datos sintéticos, sin clave, proyecto y puertos propios
+DOCKER_PRUEBAS=1 .venv/bin/python -m pytest -q -m docker tests/docker
 ```
 
 ## Estructura
@@ -191,6 +197,17 @@ OPENROUTER_PRUEBA_REAL=1 .venv/bin/python -m pytest -q -m openrouter
     la solicitud solo encola en un búfer propio acotado; un único hilo propio exporta a MLflow (timeout
     HTTP 2 s, reintentos 0, envío asíncrono de MLflow desactivado). Con MLflow no disponible o el búfer
     lleno, la traza se descarta y se cuenta; el cierre drena el búfer con un límite de tiempo.
+  - Confirmación (revisión del PR #14): el exportador de MLflow se traga sus errores (`start_trace`
+    solo avisa; `log_spans` en DEBUG). Un hilo `verificar-trazas` lee cada traza con la API pública
+    `MlflowClient.get_trace` a +1, +3 y +7 s desde la exportación (instantes absolutos, no
+    intervalos) y exige sus tramos **y** sus etiquetas (si solo `log_spans` llega, el almacén crea la
+    traza sin etiquetas). **Nunca se reexporta** (la API pública
+    no permite el mismo `trace_id`; un reenvío duplicaría). Categorías sin doble conteo: `exportadas`,
+    `incompletas`, `no_confirmadas` (no confirmada en la ventana; **no** implica que no se guardó),
+    `fallidas` (excepción propia) y `descartadas`; `registradas` = su suma + en curso. El cierre
+    (<= 5 s) cuenta lo pendiente y congela los contadores; nada pendiente cuenta como exportada.
+    Logs: un filtro solo en `mlflow.tracing.export.mlflow_v3` quita los avisos de exportación con URL
+    y excepción (`PREFIJOS_AVISOS_EXPORTACION`); los avisos propios solo llevan categorías y recuentos.
   - `estado_mlflow.py` (sin MLflow): hilo de fondo que comprueba el servidor; `/health` solo lee el
     estado: `mlflow_no_configurado`, `mlflow_no_disponible` u operativo, independiente del intérprete.
 - `evaluacion_mlflow/` (hito 2): `python -m evaluacion_mlflow --resumen <resumen_publico.json>`
@@ -198,6 +215,22 @@ OPENROUTER_PRUEBA_REAL=1 .venv/bin/python -m pytest -q -m openrouter
   y suma tokens y coste solo con las trazas de esa ejecución (`evaluacion.ejecucion`). Si faltan
   trazas o algún coste, `costes_completos=false` y no hay total. `evaluacion/` no usa MLflow
   (`test_capas.py`); el evaluador envía la correlación y mide la latencia de cada petición.
+- Contenedores (hito 3): `Dockerfile`, `compose.yaml`, `.dockerignore`, `docker/version_git.py`.
+  - Imagen de la API: `python:3.12-slim` fijada por digest; `requirements.txt` con `--no-deps` y
+    `pip check`; solo `COPY app/`; usuario 10001; sin `# syntax=` (frontend integrado de BuildKit).
+    `.dockerignore` es una lista blanca: nunca datos, `.env`, pruebas, evaluador ni material del curso.
+  - Versión (D-H4): el SHA de Git se lee de `.git/HEAD`, `.git/refs/` y `.git/packed-refs` con un
+    montaje temporal durante la construcción (`/app/VERSION`); `.git` no entra en la imagen. Sin
+    repositorio, `unknown`. Un `APP_VERSION` no vacío en el entorno prevalece.
+  - Compose: `api` (credenciales por `env_file` en tiempo de ejecución, datos montados `:ro`,
+    `DATA_DIR` y `MLFLOW_TRACKING_URI` fijados en `environment`) y `mlflow` (imagen oficial v3.18.0
+    fijada por digest, la misma versión que el cliente; sqlite y artefactos en el volumen
+    `mlflow_datos`; solo en `127.0.0.1`; `--allowed-hosts`). La API depende de MLflow con
+    `service_started` y `required: false`: **nunca** `service_healthy` (D-M3).
+  - Sin datos, la API no arranca (D24) y Docker la reinicia con espera creciente; se recupera sola
+    al colocarlos (probado en `tests/docker`).
+  - `tests/integracion/test_contenedores.py` valida los archivos sin Docker (CI). `tests/docker/`
+    (marcador `docker`, `DOCKER_PRUEBAS=1`) levanta la pila real; corre en el trabajo `docker` de la CI.
 - `tests/unit/`, `tests/integracion/`: con datos sintéticos inventados (`tests/fixtures/`).
 - `tests/referencia/`: con datos reales y casos de desarrollo locales (marcador `referencia`).
   Los resultados esperados se leen siempre desde `EVAL_DEV_PATH`; nunca se copian al repositorio.

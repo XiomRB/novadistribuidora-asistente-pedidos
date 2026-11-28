@@ -11,6 +11,8 @@
 """
 
 import json
+import os
+import logging
 import statistics
 import threading
 import time
@@ -48,6 +50,19 @@ def con_uso(coste=0.00025):
     return {"raw": Crudo(coste), "parsed": Interpretacion.validar({"eventos": [EVENTO]}, 1), "parsing_error": None}
 
 
+@pytest.fixture(autouse=True)
+def _aislar_uri_de_mlflow():
+    """`mlflow.set_tracking_uri()` escribe MLFLOW_TRACKING_URI en el entorno del proceso: sin esto, la URI
+    temporal se filtraría a las pruebas siguientes (p. ej., a las de referencia, que leen la configuración).
+    Restauración explícita: `monkeypatch.delenv(raising=False)` no deshace nada si la variable no existía."""
+    original = os.environ.get("MLFLOW_TRACKING_URI")
+    yield
+    if original is None:
+        os.environ.pop("MLFLOW_TRACKING_URI", None)
+    else:
+        os.environ["MLFLOW_TRACKING_URI"] = original
+
+
 @pytest.fixture(scope="module")
 def datos(tmp_path_factory):
     return cargar_contexto(tmp_path_factory.mktemp("mlflow_datos")).datos
@@ -59,10 +74,10 @@ def almacen(tmp_path, monkeypatch):
     return f"sqlite:///{tmp_path / 'mlflow.db'}"
 
 
-def observabilidad(uri, modo="metadatos", experimento="lab3-api"):
+def observabilidad(uri, modo="metadatos", experimento="lab3-api", esperas=(0.2, 0.5, 1.0)):
     referencia = []
     estado = EstadoMlflow(uri, intervalo_s=60, al_conectar=lambda: referencia[0].preparar())
-    trazador = Trazador(estado, experimento, modo, "zqxversion", "zqx/modelo", "base")
+    trazador = Trazador(estado, experimento, modo, "zqxversion", "zqx/modelo", "base", esperas=esperas)
     referencia.append(trazador)
     estado.comprobar_ahora()
     return estado, trazador
@@ -208,3 +223,87 @@ def test_evaluacion_mlflow_registra_el_run_y_de_d39_solo_si_se_aprobo(datos, alm
     assert run.data.metrics["PUB.r0.exactitud"] == 1.0 and run.data.metrics["coste_total_usd"] == 0.006
     assert [k for k in run.data.metrics if k.startswith("D39.")] == ["D39.aprobado"]
     assert run.data.tags["costes_completos"] == "true" and run.data.tags["ejecucion_id"] == "r1"
+
+
+# --- Confirmación de la exportación (revisión del PR #14) -------------------------------------
+
+
+def _esperar_resueltas(trazador, limite=10.0):
+    fin = time.monotonic() + limite
+    while time.monotonic() < fin and trazador.contadores()["en_curso"]:
+        time.sleep(0.05)
+
+
+def test_exportaciones_normales_quedan_confirmadas_con_la_api_publica(datos, almacen):
+    estado, trazador = observabilidad(almacen)
+    with TestClient(crear_app(datos=datos, interprete=InterpreteLLM(Cadena(con_uso()), "x"), observabilidad=(estado, trazador))) as cliente:
+        for i in range(2):
+            assert pedir(cliente, ejecucion="v1", caso=f"C{i}", conjunto="PUB", repeticion="0", privado="0").status_code == 200
+        _esperar_resueltas(trazador)
+        c = trazador.contadores()
+        assert c["exportadas"] == 2 and c["registradas"] == 2 and c["en_curso"] == 0
+    assert len(trazas(filtro="tags.`evaluacion.ejecucion` = 'v1'")) == 2
+
+
+def test_fallo_tragado_por_mlflow_no_confirmada_sin_duplicado_ni_costes_completos(datos, almacen, monkeypatch, caplog):
+    from mlflow.tracing.client import TracingClient
+
+    original, llamadas = TracingClient.start_trace, []
+
+    def falla_la_primera(self, info, *args, **kwargs):  # MLflow captura esta excepción y solo emite un aviso
+        llamadas.append(1)
+        if len(llamadas) == 1:
+            raise TimeoutError("API request to http://mlflow:5000/api/3.0/mlflow/traces timed out")
+        return original(self, info, *args, **kwargs)
+
+    monkeypatch.setattr(TracingClient, "start_trace", falla_la_primera)
+    estado, trazador = observabilidad(almacen)
+    with caplog.at_level(logging.DEBUG):
+        with TestClient(crear_app(datos=datos, interprete=InterpreteLLM(Cadena(con_uso(0.001)), "x"), observabilidad=(estado, trazador))) as cliente:
+            for i in range(2):
+                assert pedir(cliente, ejecucion="v2", caso=f"C{i}", conjunto="PUB", repeticion="0", privado="0").status_code == 200
+            _esperar_resueltas(trazador)
+            c = trazador.contadores()
+    # La primera: `log_spans` guardó los spans y el almacén creó la traza **sin etiquetas** (las pone
+    # `start_trace`): existe, pero no se puede correlacionar -> incompleta, nunca exportada.
+    assert c["exportadas"] == 1 and c["incompletas"] == 1 and c["registradas"] == 2 and c["en_curso"] == 0
+    assert len(llamadas) == 2  # una exportación por solicitud: nunca se reexporta
+    assert len(trazas(filtro="tags.`evaluacion.ejecucion` = 'v2'")) == 1  # sin duplicados
+    costes = costes_de_ejecucion(_metadatos("v2", {"PUB": 2}), "lab3-api", espera_s=0)
+    assert not costes.completos and costes.coste_total_usd is None
+    # El aviso de MLflow (URL interna y excepción) no llega a ningún handler; el propio, saneado, sí.
+    textos = [r.getMessage() for r in caplog.records]
+    assert not any(m.startswith("Failed to send trace") for m in textos)
+    propios = [m for m in textos if m.startswith("traza no confirmada")]  # incompleta tras 3 lecturas
+    assert propios and all("http" not in m and "timed out" not in m and "K04" not in m for m in propios)
+
+
+def test_traza_ausente_en_el_servidor_queda_no_confirmada(datos, almacen, monkeypatch):
+    from mlflow.tracing.client import TracingClient
+
+    iniciadas = []
+    original_inicio, original_spans = TracingClient.start_trace, TracingClient.log_spans
+
+    def inicio(self, info, *args, **kwargs):
+        iniciadas.append(1)
+        if len(iniciadas) == 1:
+            raise TimeoutError("zqx")
+        return original_inicio(self, info, *args, **kwargs)
+
+    def spans(self, *args, **kwargs):  # fallan todos los spans de la primera traza
+        if not iniciadas:
+            raise TimeoutError("zqx")
+        return original_spans(self, *args, **kwargs)
+
+    monkeypatch.setattr(TracingClient, "start_trace", inicio)
+    monkeypatch.setattr(TracingClient, "log_spans", spans)
+    estado, trazador = observabilidad(almacen)
+    with TestClient(crear_app(datos=datos, interprete=InterpreteLLM(Cadena(con_uso()), "x"), observabilidad=(estado, trazador))) as cliente:
+        assert pedir(cliente, ejecucion="v3", caso="C0", conjunto="PUB", repeticion="0", privado="0").status_code == 200
+        _esperar_resueltas(trazador)
+        assert pedir(cliente, ejecucion="v3", caso="C1", conjunto="PUB", repeticion="0", privado="0").status_code == 200
+        _esperar_resueltas(trazador)
+        c = trazador.contadores()
+    assert c["no_confirmadas"] == 1 and c["exportadas"] == 1 and c["incompletas"] == 0 and c["en_curso"] == 0
+    assert len(iniciadas) == 2  # nunca se reexporta
+    assert [t.info.tags["evaluacion.caso"] for t in trazas(filtro="tags.`evaluacion.ejecucion` = 'v3'")] == ["C1"]

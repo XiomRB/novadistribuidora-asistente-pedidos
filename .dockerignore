@@ -1,11 +1,12 @@
-.git
-.venv
-.env
-datos
-tests
-evaluacion
-evidencia
-mlruns
-mlartifacts
+# Lista blanca (hito 3): el contexto de construcción solo expone lo necesario.
+# Nunca entran datos (*.parquet), credenciales (.env), pruebas, el evaluador ni material del curso.
+*
+!app/
+!requirements.txt
+!docker/version_git.py
+# Solo para resolver el SHA de Git durante la construcción (montaje temporal, nunca se copia).
+!.git/HEAD
+!.git/refs/
+!.git/packed-refs
 **/__pycache__
-.pytest_cache
+**/*.py[cod]

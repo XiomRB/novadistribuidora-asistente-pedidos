@@ -4,4 +4,5 @@ pythonpath = ["."]
 markers = [
     "referencia: pruebas con los datos reales y los casos de desarrollo locales (se omiten si no están disponibles)",
     "openrouter: prueba real con OpenRouter (coste por token; requiere OPENROUTER_PRUEBA_REAL=1; nunca en la CI)",
+    "docker: prueba de humo con Docker Compose y contenedores reales (requiere DOCKER_PRUEBAS=1)",
 ]
