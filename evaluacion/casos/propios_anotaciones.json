@@ -1,0 +1,263 @@
+{
+ "casos": {
+  "A01": {
+   "productos": [
+    {
+     "claves": [
+      [
+       "naranjita",
+       "600"
+      ]
+     ]
+    },
+    {
+     "claves": [
+      [
+       "agua",
+       "pura",
+       "1.5"
+      ]
+     ]
+    }
+   ]
+  },
+  "A02": {
+   "productos": [
+    {
+     "claves": [
+      [
+       "limonada",
+       "volcán"
+      ]
+     ]
+    },
+    {
+     "claves": [
+      [
+       "cloro",
+       "blancura"
+      ]
+     ]
+    }
+   ]
+  },
+  "A03": {
+   "productos": [
+    {
+     "claves": [
+      [
+       "energía",
+       "max"
+      ]
+     ]
+    }
+   ]
+  },
+  "A04": {
+   "productos": [
+    {
+     "claves": [
+      [
+       "papitas",
+       "doradas"
+      ]
+     ]
+    },
+    {
+     "claves": [
+      [
+       "chicharritos"
+      ]
+     ]
+    }
+   ]
+  },
+  "A05": {
+   "productos": [
+    {
+     "claves": [
+      [
+       "kola",
+       "600"
+      ]
+     ]
+    }
+   ]
+  },
+  "A06": {
+   "productos": [
+    {
+     "claves": [
+      [
+       "sopa",
+       "rápida"
+      ]
+     ]
+    },
+    {
+     "claves": [
+      [
+       "sal",
+       "pacífico"
+      ]
+     ]
+    }
+   ]
+  },
+  "A07": {
+   "productos": [
+    {
+     "claves": [
+      [
+       "frijol"
+      ]
+     ]
+    }
+   ]
+  },
+  "A08": {
+   "productos": [
+    {
+     "claves": [
+      [
+       "jugo",
+       "huerto",
+       "manzana"
+      ]
+     ]
+    }
+   ]
+  },
+  "A09": {
+   "productos": [
+    {
+     "claves": [
+      [
+       "galletas",
+       "dulcitas",
+       "chocolate"
+      ]
+     ]
+    },
+    {
+     "claves": [
+      [
+       "desodorante",
+       "fresco"
+      ]
+     ]
+    }
+   ]
+  },
+  "A10": {
+   "productos": [
+    {
+     "claves": [
+      [
+       "agua",
+       "pura",
+       "600"
+      ]
+     ]
+    },
+    {
+     "claves": [
+      [
+       "cerveza"
+      ]
+     ]
+    }
+   ]
+  },
+  "A11": {
+   "productos": [
+    {
+     "claves": [
+      [
+       "kola",
+       "norte",
+       "1.5"
+      ]
+     ]
+    }
+   ]
+  },
+  "A12": {
+   "productos": [
+    {
+     "claves": [
+      [
+       "detergente",
+       "espumoso"
+      ]
+     ]
+    }
+   ]
+  },
+  "A13": {
+   "productos": []
+  },
+  "A14": {
+   "productos": [
+    {
+     "claves": [
+      [
+       "frijol",
+       "rojo",
+       "monte",
+       "verde"
+      ]
+     ]
+    },
+    {
+     "claves": [
+      [
+       "café",
+       "altura",
+       "molido"
+      ]
+     ]
+    },
+    {
+     "claves": [
+      [
+       "pasta",
+       "dental",
+       "sonrisa"
+      ]
+     ]
+    },
+    {
+     "claves": [
+      [
+       "galletas",
+       "dulcitas",
+       "vainilla"
+      ]
+     ]
+    },
+    {
+     "claves": [
+      [
+       "maní",
+       "la",
+       "finca"
+      ]
+     ]
+    }
+   ]
+  },
+  "A15": {
+   "productos": [
+    {
+     "claves": [
+      [
+       "kola",
+       "600"
+      ]
+     ]
+    }
+   ]
+  }
+ }
+}
