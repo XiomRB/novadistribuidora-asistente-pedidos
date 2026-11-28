@@ -239,6 +239,11 @@ DOCKER_PRUEBAS=1 .venv/bin/python -m pytest -q -m docker tests/docker
     con lista blanca (D61-a, contención en `texto`, límite combinado de 20) y reconstruye los
     textos desde `EVAL_DEV_PATH`. Nunca agregar campos de texto a este archivo.
 - `datos/`: archivos `.parquet` colocados localmente (ignorados por Git).
+- `evaluacion/casos/` (hito 4): casos propios públicos A01-A15 (`propios.jsonl`, formato de los casos de
+  desarrollo) y sus anotaciones (`propios_anotaciones.json`), aprobados y fijados por hash en
+  `tests/integracion/test_casos_propios.py`. No modificarlos sin una nueva revisión. En A09 el motor
+  escribe el nombre del catálogo en `agotado_sin_sustituto` y el esperado lleva el fragmento literal:
+  es una limitación de la métrica textual, no un error funcional ni crítico.
 - `evaluacion/` (E2c-1): evaluador por HTTP (D33, D91). No es parte de la aplicación: `app/` nunca depende
   de él y él tampoco depende de LLM ni de MLflow (`test_capas.py`). `python -m evaluacion --modo {e3,e6}
   --registro R --base-url U --timeout S --salida-privada D` (códigos: 0 aprobado, 1 no aprobado,
